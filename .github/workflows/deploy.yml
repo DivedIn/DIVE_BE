@@ -1,0 +1,26 @@
+name: Deploy to EC2
+on:
+  pull_request:
+    types: [closed]
+    branches: [main]
+jobs:
+  deploy:
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v2
+    - name: Deploy to EC2
+      env:
+        PRIVATE_KEY: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
+        HOST: ${{ secrets.EC2_HOST }}
+        USER: ${{ secrets.EC2_USER }}
+      run: |
+        printf "%s" "$PRIVATE_KEY" > private_key && chmod 600 private_key
+        ssh -o StrictHostKeyChecking=no -i private_key ${USER}@${HOST} '
+          cd dive &&
+          PID=$(pgrep -f xidong-0.0.1-SNAPSHOT.jar) &&
+          if [ ! -z "$PID" ]; then sudo kill -9 $PID; fi &&
+          git pull &&
+          ./gradlew build &&
+          sudo nohup java -jar xidong-0.0.1-SNAPSHOT.jar &'
