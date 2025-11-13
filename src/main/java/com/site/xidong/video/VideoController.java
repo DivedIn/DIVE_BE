@@ -52,7 +52,7 @@ public class VideoController {
 
     @PostMapping("/complete-upload")
     @Timed
-    public ResponseEntity<VideoReturnDTO> completeUpload(
+    public ResponseEntity<Void> completeUpload(
             @RequestBody VideoUploadCompleteRequest request) {
 
         long startTime = System.currentTimeMillis();
@@ -64,7 +64,7 @@ public class VideoController {
 
         try {
             if (asyncEnabled) { // 비동기 방식
-                CompletableFuture<VideoReturnDTO> future = videoService.createInitialAsync(
+                CompletableFuture<Void> future = videoService.createInitialAsync(
                         request.getQuestionId(),
                         request.getVideoKey(),
                         request.isOpen(),
@@ -88,9 +88,7 @@ public class VideoController {
                         executor.getThreadPoolExecutor().getCompletedTaskCount());
 
                 // 즉시 응답 반환
-                VideoReturnDTO videoReturnDTO = VideoReturnDTO.builder()
-                        .build();
-                return ResponseEntity.ok(videoReturnDTO);
+                return ResponseEntity.accepted().build();
             } else { // 동기 방식
                 startTime = System.currentTimeMillis();
                 log.info("요청 접수: [{}], Mode: {}, Async: {}, Tomcat Thread: {}", request, usePresignedUrl ? "PRESIGNED" : "FILE_BASED", asyncEnabled, Thread.currentThread().getName());
@@ -114,8 +112,7 @@ public class VideoController {
                         executor.getQueueSize(),
                         executor.getThreadPoolExecutor().getCompletedTaskCount());
 
-                // 즉시 응답 반환
-                return ResponseEntity.ok(videoReturnDTO);
+                return ResponseEntity.ok().build();
             }
         } catch (Exception e) {
             log.error("비디오 초기 처리 실패", e);

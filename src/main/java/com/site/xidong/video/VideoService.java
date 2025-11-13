@@ -82,7 +82,7 @@ public class VideoService {
 
     @Async("videoProcessingExecutor")
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public CompletableFuture<VideoReturnDTO> createInitialAsync(Long questionId, String videoKey, Boolean isOpen, long startTime, boolean presigned) {
+    public CompletableFuture<Void> createInitialAsync(Long questionId, String videoKey, Boolean isOpen, long startTime, boolean presigned) {
         try {
             Authentication auth = SecurityContextHolder.getContext().getAuthentication();
             SiteUserSecurityDTO userDetails = (SiteUserSecurityDTO) auth.getPrincipal();
@@ -111,21 +111,7 @@ public class VideoService {
 
             self.processVideoAsync(savedVideo.getId(), videoKey, user.getUsername(), startTime, presigned);
 
-            VideoReturnDTO videoReturnDTO = VideoReturnDTO.builder()
-                    .videoId(video.getId())
-                    .videoPath(video.getVideoPath())
-                    .videoName(video.getVideoName())
-                    .imageUrl(video.getSiteUser().getImageUrl())
-                    .username(video.getSiteUser().getUsername())
-                    .nickname(video.getSiteUser().getNickname())
-                    .thumbnail(video.getThumbnail())
-                    .question(video.getQuestion().getContents())
-                    .category(video.getQuestion().getQuestionSet().getCategory())
-                    .createdAt(video.getCreatedAt())
-                    .updatedAt(video.getUpdatedAt())
-                    .isOpen(video.isOpen())
-                    .build();
-            return CompletableFuture.completedFuture(videoReturnDTO);
+            return CompletableFuture.completedFuture(null);
 
         } catch (Exception e) {
             log.error("비디오 초기 처리 실패", e);
