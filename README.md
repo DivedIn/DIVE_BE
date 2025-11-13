@@ -1,6 +1,6 @@
 # DIVE <a href="https://eclectic-biscuit-0eca48.netlify.app/"> <img src="https://github.com/minyeongg/dive-server/blob/main/assets/dive_logo.png" align="left" width="100"></a>
 ### 개발자를 위한 기술면접 연습 피드백 서비스
-https://legendary-starship-4ac160.netlify.app
+https://eclectic-biscuit-0eca48.netlify.app/
 <br>
 
 ## 주요 기능
@@ -15,6 +15,8 @@ https://legendary-starship-4ac160.netlify.app
 **Front-end** : <a href="https://github.com/skdltn210">고은수</a> <br>
 **Back-end** : <a href="https://github.com/minyeongg">박민영</a>
 
+## DEV Server Architecture
+<img width="912" alt="image" src="https://github.com/minyeongg/dive-server/blob/main/assets/image.png">
 
 ## Tech Stack
 **Language**
@@ -38,6 +40,5 @@ https://legendary-starship-4ac160.netlify.app
 ## Database Schema
 <img src="https://github.com/minyeongg/dive-server/blob/main/assets/dive_erd.png" width="900">
 
-## DEV Server Architecture
-<img width="912" alt="image" src="https://github.com/minyeongg/dive-server/blob/main/assets/image.png">
+
 
