@@ -25,7 +25,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         String requestURI = servletRequest.getRequestURI();
         log.info("requestURI: {}", requestURI);
 
-        List<String> permitAllUrls = Arrays.asList("/siteUser/signup", "/siteUser/login", "/auth/login/kakao/**","/login/oauth2/code/**", "**/error**", "**/oauth2/**", "/api/**", "/auth/kakao/callback", "/auth/naver/callback", "/feedback/**");
+        List<String> permitAllUrls = Arrays.asList("/siteUser/signup", "/siteUser/login", "/auth/login/kakao/**","/login/oauth2/code/**", "**/error**", "**/oauth2/**", "/api/**", "/auth/kakao/callback", "/auth/naver/callback", "/feedback/**", "/actuator/**");
         List<String> authUrls = Arrays.asList("/questionSet/**", "/siteUser/myInfo", "/auth/refresh", "/video/**", "/auth/logout", "/comment/**", "/notification/**", "/question/**");
 
         boolean isPermitAll = permitAllUrls.stream().anyMatch(pattern ->

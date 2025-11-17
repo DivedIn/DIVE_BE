@@ -77,7 +77,7 @@ public class CustomSecurityConfig {
                 .authorizeHttpRequests((authorize) ->
                         authorize
                                 .requestMatchers("/questionSet/create", "/siteUser/myInfo", "/comment/**", "/video/**", "/auth/logout", "/auth/refresh").authenticated()
-                                .requestMatchers("/siteUser/signup", "/siteUser/login", "/auth/login/kakao/**","/login/oauth2/code/**", "**/error**", "**/oauth2/**", "/api/**", "/auth/*/callback").permitAll()
+                                .requestMatchers("/siteUser/signup", "/siteUser/login", "/auth/login/kakao/**","/login/oauth2/code/**", "**/error**", "**/oauth2/**", "/api/**", "/auth/*/callback", "/actuator/**").permitAll()
                                 .anyRequest().authenticated())
                 .addFilterBefore(new JwtAuthenticationFilter(jwtTokenProvider), UsernamePasswordAuthenticationFilter.class);
 
