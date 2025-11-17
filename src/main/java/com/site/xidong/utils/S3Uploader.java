@@ -29,8 +29,8 @@ public class S3Uploader {
     @Value("${cloud.aws.s3.bucket}")
     private String bucket;
 
-    @Value("${cloud.aws.cloudfront.domain}")
-    private String cloudFrontDomain;
+    @Value("${cloud.aws.region.static}")
+    private String region;
 
     public Map<String, String> generatePresignedUrl(String fileName) {
         // 5분 후 만료되도록 설정
@@ -54,7 +54,7 @@ public class S3Uploader {
 
         Map<String, String> response = new HashMap<>();
         response.put("presignedUrl", url.toString());
-        response.put("videoUrl", getCloudFrontUrl() + "/" + webmFileName);
+        response.put("videoUrl", getS3UrlPrefix() + "/" + webmFileName);
         response.put("videoKey", webmFileName);
         return response;
     }
@@ -87,14 +87,14 @@ public class S3Uploader {
             tempFile.delete();
             baos.close();
 
-            return getCloudFrontUrl() + "/" + thumbnailName;
+            return getS3UrlPrefix() + "/" + thumbnailName;
         } catch (Exception e) {
             log.error("Error creating thumbnail", e);
             throw new RuntimeException("Failed to create thumbnail", e);
         }
     }
 
-    public String getCloudFrontUrl() {
-        return cloudFrontDomain;
+    public String getS3UrlPrefix() {
+        return "https://" + bucket + ".s3." + region + ".amazonaws.com";
     }
 }
