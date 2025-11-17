@@ -70,8 +70,8 @@ public class VideoService {
     @Value("${cloud.aws.s3.bucket}")
     private String bucket;
 
-    @Value("${cloud.aws.cloudfront.domain}")
-    private String cloudFrontDomain;
+    @Value("${cloud.aws.region.static}")
+    private String region;
 
     @Autowired
     @Qualifier("threadPoolTaskExecutor")
@@ -79,6 +79,10 @@ public class VideoService {
 
     @Autowired @Lazy
     private VideoService self;
+
+    private String getS3UrlPrefix() {
+        return "https://" + bucket + ".s3." + region + ".amazonaws.com";
+    }
 
     @Async("videoProcessingExecutor")
     @Transactional(propagation = Propagation.REQUIRES_NEW)
@@ -93,7 +97,7 @@ public class VideoService {
                     .orElseThrow(() -> new QuestionNotFoundException());
 
             // 비디오 URL 생성
-            String videoUrl = String.format("%s/%s", cloudFrontDomain, videoKey);
+            String videoUrl = String.format("%s/%s", getS3UrlPrefix(), videoKey);
 
             // Step 5: Video 객체 생성 및 저장
             Video video = Video.builder()
@@ -131,7 +135,7 @@ public class VideoService {
                     .orElseThrow(() -> new QuestionNotFoundException());
 
             // 비디오 URL 생성
-            String videoUrl = String.format("%s/%s", cloudFrontDomain, videoKey);
+            String videoUrl = String.format("%s/%s", getS3UrlPrefix(), videoKey);
 
             // Step 5: Video 객체 생성 및 저장
             Video video = Video.builder()
@@ -854,7 +858,7 @@ public class VideoService {
                 // 임시 파일 삭제
                 Files.delete(tempThumbnail);
 
-                String url = String.format("%s/%s", cloudFrontDomain, thumbnailKey);
+                String url = String.format("%s/%s", getS3UrlPrefix(), thumbnailKey);
                 log.info("썸네일 업로드 완료");
                 return url;
             }
@@ -951,7 +955,7 @@ public class VideoService {
                     new ByteArrayInputStream(thumbnailBytes),
                     thumbnailBytes.length));
             log.info("썸네일 S3 업로드 완료: {}", thumbnailKey);
-            String url = String.format("%s/%s", cloudFrontDomain, thumbnailKey);
+            String url = String.format("%s/%s", getS3UrlPrefix(), thumbnailKey);
             return url;
         } catch (Exception e) {
             log.warn("썸네일 생성 중 예외 발생. 기본 썸네일 반환", e);
