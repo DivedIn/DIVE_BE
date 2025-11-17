@@ -534,7 +534,7 @@ public class VideoService {
                         "-f", "mp3",
                         "pipe:1"
                 );
-                pb.redirectErrorStream(true);
+                pb.redirectErrorStream(true); // TODO: 제거
                 Process process = pb.start();
 
                 StringBuilder errorOutput = new StringBuilder();
