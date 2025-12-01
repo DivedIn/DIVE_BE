@@ -28,7 +28,7 @@ public class FeedbackService {
     private final VideoRepository videoRepository;
     private final FeedbackRepository feedbackRepository;
 
-    public FeedbackReturnDTO getFeedback(AnswerDTO answerDTO) throws Exception { //TODO: WebClient으로 변경하기
+    public FeedbackReturnDTO getFeedback(AnswerDTO answerDTO) throws Exception {
         Video video = videoRepository.findById(answerDTO.getVideoId()).orElse(null);
         String question = video.getQuestion().getContents();
         String answer = answerDTO.getAnswer();

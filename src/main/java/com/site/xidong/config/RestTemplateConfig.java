@@ -1,17 +1,22 @@
 package com.site.xidong.config;
 
-import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Configuration;
+import org.springframework.http.converter.FormHttpMessageConverter;
+import org.springframework.http.converter.HttpMessageConverter;
 import org.springframework.web.client.RestTemplate;
 
-@Configuration
+import java.util.ArrayList;
+import java.util.List;
+
 public class RestTemplateConfig {
 
     @Bean
-    public RestTemplate restTemplate(RestTemplateBuilder builder) {
-        return builder
-                .rootUri("https://hooks.slack.com/services/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")
-                .build();
+    public RestTemplate restTemplate() {
+        RestTemplate restTemplate = new RestTemplate();
+
+        List<HttpMessageConverter<?>> messageConverters = new ArrayList<>();
+        messageConverters.add(new FormHttpMessageConverter());
+        restTemplate.setMessageConverters(messageConverters);
+        return restTemplate;
     }
 }

@@ -80,9 +80,6 @@ public class VideoService {
     @Autowired @Lazy
     private VideoService self;
 
-    @Autowired
-    private ThreadPoolMonitor threadPoolMonitor;
-
     private String getS3UrlPrefix() {
         return "https://" + bucket + ".s3." + region + ".amazonaws.com";
     }
@@ -185,7 +182,6 @@ public class VideoService {
                 Thread.currentThread().getName(), videoId, videoProcessingExecutor.getQueueSize()); //TODO: 톰캣 스레드 말고 스프링 스레드 이름 출력해야함
 
         try {
-            threadPoolMonitor.logThreadPoolStatus("영상 처리 작업 시작");
             // S3 클라이언트 초기화
             AwsCredentialsProvider credentialsProvider = DefaultCredentialsProvider.create();
             S3Client s3Client = S3Client.builder()
@@ -273,7 +269,7 @@ public class VideoService {
             long durationMs = endTime - startTime; // Total duration
             log.info("=== 영상 처리 비동기 작업 완료 - Thread: {}, videoId: {}, Queue size: {}, 총 소요 시간: {}ms ===",
                     Thread.currentThread().getName(), videoId, videoProcessingExecutor.getQueueSize(), durationMs);
-            threadPoolMonitor.logThreadPoolStatus("작업 완료");
+
         } catch (Exception e) {
             log.error("비디오 ID: {} 비동기 처리 중 오류 발생", videoId, e);
             handleError(videoId, username);
