@@ -52,18 +52,34 @@ public class VideoController {
 
     @PostMapping("/complete-upload")
     @Timed
-    public ResponseEntity<Void> completeUpload(
+    public ResponseEntity<Map<String, String>> completeUpload(
             @RequestBody VideoUploadCompleteRequest request) {
 
         long startTime = System.currentTimeMillis();
-        log.info("요청 접수: [{}], Mode: {}, Async: {}, Tomcat Thread: {}", request, usePresignedUrl ? "PRESIGNED" : "FILE_BASED", asyncEnabled, Thread.currentThread().getName());
-        log.info("현재 활성 스레드: {}, 큐 대기: {}, 완료된 작업: {}",
-                executor.getActiveCount(),
-                executor.getQueueSize(),
-                executor.getThreadPoolExecutor().getCompletedTaskCount());
+        log.info("요청 접수: [{}], Mode: {}, Async: {}, Tomcat Thread: {}",
+                request, usePresignedUrl ? "PRESIGNED" : "FILE_BASED", asyncEnabled, Thread.currentThread().getName());
 
         try {
-            if (asyncEnabled) { // 비동기 방식
+            if (!asyncEnabled) {
+                // 동기 방식 (기존 로직 유지)
+                VideoReturnDTO videoReturnDTO = videoService.createInitialSync(
+                        request.getQuestionId(),
+                        request.getVideoKey(),
+                        request.isOpen(),
+                        startTime
+                );
+                return ResponseEntity.ok(Map.of("status", "completed"));
+            }
+
+            // === 옵션 2: 하이브리드 방식 ===
+
+            // Step 1: 스레드풀 용량 확인
+            boolean hasCapacity = videoService.checkThreadPoolCapacity();
+
+            if (hasCapacity) {
+                // Fast Path: 즉시 처리 (실험의 1~10번)
+                log.info("Fast Path: 즉시 처리 시작 - videoKey: {}", request.getVideoKey());
+
                 CompletableFuture<Void> future = videoService.createInitialAsync(
                         request.getQuestionId(),
                         request.getVideoKey(),
@@ -72,51 +88,48 @@ public class VideoController {
                         usePresignedUrl
                 );
 
-                // 비동기 작업의 예외를 백그라운드에서 처리
                 future.exceptionally(throwable -> {
-                    log.error("비디오 초기 처리 실패: questionId={}, videoKey={}",
+                    log.error("비디오 처리 실패: questionId={}, videoKey={}",
                             request.getQuestionId(), request.getVideoKey(), throwable);
                     return null;
                 });
 
-                long duration = System.currentTimeMillis() - startTime;
-                log.info("Tomcat 요청 처리 완료: [{}], Tomcat Thread: {}, 처리 시간: {}ms",
-                        request, Thread.currentThread().getName(), duration);
-                log.info("현재 활성 스레드: {}, 큐 대기: {}, 완료된 작업: {}",
-                        executor.getActiveCount(),
-                        executor.getQueueSize(),
-                        executor.getThreadPoolExecutor().getCompletedTaskCount());
+                return ResponseEntity.accepted()
+                        .body(Map.of(
+                                "status", "processing",
+                                "path", "fast",
+                                "message", "즉시 처리 중입니다"
+                        ));
 
-                // 즉시 응답 반환
-                return ResponseEntity.accepted().build();
-            } else { // 동기 방식
-                startTime = System.currentTimeMillis();
-                log.info("요청 접수: [{}], Mode: {}, Async: {}, Tomcat Thread: {}", request, usePresignedUrl ? "PRESIGNED" : "FILE_BASED", asyncEnabled, Thread.currentThread().getName());
-                log.info("현재 활성 스레드: {}, 큐 대기: {}, 완료된 작업: {}",
-                        executor.getActiveCount(),
-                        executor.getQueueSize(),
-                        executor.getThreadPoolExecutor().getCompletedTaskCount());
+            } else {
+                // Slow Path: DB 큐에 저장 (실험의 61~70번)
+                log.warn("Slow Path: DB 큐 저장 - videoKey: {} (스레드풀 포화)", request.getVideoKey());
 
-                VideoReturnDTO videoReturnDTO = videoService.createInitialSync(
+                Long queueId = videoService.enqueue(
                         request.getQuestionId(),
                         request.getVideoKey(),
                         request.isOpen(),
-                        startTime
+                        startTime,
+                        usePresignedUrl
                 );
 
-                long duration = System.currentTimeMillis() - startTime;
-                log.info("요청 처리 완료: [{}], Tomcat Thread: {}, 처리 시간: {}ms",
-                        request, Thread.currentThread().getName(), duration);
-                log.info("현재 활성 스레드: {}, 큐 대기: {}, 완료된 작업: {}",
-                        executor.getActiveCount(),
-                        executor.getQueueSize(),
-                        executor.getThreadPoolExecutor().getCompletedTaskCount());
-
-                return ResponseEntity.ok().build();
+                return ResponseEntity.accepted()
+                        .body(Map.of(
+                                "status", "queued",
+                                "path", "slow",
+                                "queueId", queueId.toString(),
+                                "message", "대기열에 추가되었습니다"
+                        ));
             }
+
         } catch (Exception e) {
             log.error("비디오 초기 처리 실패", e);
-            return new ResponseEntity<>(HttpStatus.INTERNAL_SERVER_ERROR);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("error", e.getMessage()));
+        } finally {
+            long duration = System.currentTimeMillis() - startTime;
+            log.info("Tomcat 요청 처리 완료: 처리 시간: {}ms, 활성: {}, 큐: {}",
+                    duration, executor.getActiveCount(), executor.getQueueSize());
         }
     }
 

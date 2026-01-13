@@ -6,6 +6,8 @@ import com.site.xidong.notification.VideoNotificationDTO;
 import com.site.xidong.question.Question;
 import com.site.xidong.question.QuestionNotFoundException;
 import com.site.xidong.question.QuestionRepository;
+import com.site.xidong.queue.VideoProcessingQueue;
+import com.site.xidong.queue.VideoProcessingQueueRepository;
 import com.site.xidong.security.SiteUserSecurityDTO;
 import com.site.xidong.siteUser.SiteUser;
 import com.site.xidong.siteUser.SiteUserRepository;
@@ -60,12 +62,17 @@ import java.util.concurrent.*;
 public class VideoService {
 
     private static final String DEFAULT_THUMBNAIL_URL = "https://dive-s3-ver2.s3.ap-northeast-2.amazonaws.com/Gk9C7kwWkAATlwl.jpeg";
+    private static final int CORE_POOL_SIZE = 10;
+    private static final int QUEUE_CAPACITY = 50;
+    private static final double CAPACITY_THRESHOLD = 0.8;
     private final VideoRepository videoRepository;
     private final SiteUserRepository siteUserRepository;
     private final QuestionRepository questionRepository;
     private final AwsTranscribe awsTranscribe;
     private final FeedbackService feedbackService;
     private final NotificationService notificationService;
+    private final VideoProcessingQueueRepository queueRepository;
+    private final LocalWhisperService localWhisperService;
 
     @Value("${cloud.aws.s3.bucket}")
     private String bucket;
@@ -532,74 +539,7 @@ public class VideoService {
                         .getObjectRequest(getObjectRequest));
                 String presignedUrl = presignedRequest.url().toString();
 
-                ProcessBuilder pb = new ProcessBuilder(
-                        "ffmpeg",
-                        "-i", presignedUrl,
-                        "-vn",
-                        "-acodec", "libmp3lame",
-                        "-ar", "44100",
-                        "-ac", "2",
-                        "-f", "mp3",
-                        "pipe:1"
-                );
-                pb.redirectErrorStream(true); // TODO: 제거
-                Process process = pb.start();
-
-                StringBuilder errorOutput = new StringBuilder();
-                Thread errorThread = new Thread(() -> {
-                    try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getErrorStream()))) {
-                        String line;
-                        while ((line = reader.readLine()) != null) {
-                            errorOutput.append(line).append("\n");
-                        }
-                    } catch (IOException e) {
-                        log.error("FFmpeg 오류 스트림 읽기 실패", e);
-                    }
-                });
-                errorThread.start();
-
-                byte[] audioBytes;
-                try (InputStream ffmpegStdout = process.getInputStream()) {
-                    audioBytes = IOUtils.toByteArray(ffmpegStdout);
-                }
-
-                errorThread.join();
-                boolean completed = process.waitFor(60, TimeUnit.SECONDS);
-                if (!completed) {
-                    process.destroyForcibly();
-                    log.error("FFmpeg 오디오 처리 타임아웃");
-                    throw new RuntimeException("FFmpeg 오디오 처리 타임아웃");
-                }
-
-                int exitCode = process.exitValue();
-                if (exitCode != 0 || audioBytes.length == 0) {
-                    log.error("FFmpeg 오디오 추출 실패. 종료 코드: {}, 에러: {}", exitCode, errorOutput);
-                    throw new RuntimeException("FFmpeg 오디오 추출 실패");
-                }
-
-                log.info("FFmpeg 오디오 추출 성공: {} bytes", audioBytes.length);
-                long end = System.currentTimeMillis();
-                long duration = end - start;
-                log.info("음성 변환 소요 시간: {}ms", duration);
-
-                String audioFileName = "audio/extracted-" + UUID.randomUUID() + ".mp3";
-                PutObjectRequest putRequest = PutObjectRequest.builder()
-                        .bucket(bucket)
-                        .key(audioFileName)
-                        .contentType("audio/mpeg")
-                        .build();
-                s3Client.putObject(putRequest, RequestBody.fromBytes(audioBytes));
-                String audioUri = "s3://" + bucket + "/" + audioFileName;
-
-                start = System.currentTimeMillis();
-                String jobName = awsTranscribe.startTranscriptionJob(DefaultCredentialsProvider.create(), audioUri);
-                String transcriptUri = awsTranscribe.getTranscriptionResult(DefaultCredentialsProvider.create(), jobName);
-                String transcript = awsTranscribe.parseTranscriptionJson(transcriptUri);
-                end = System.currentTimeMillis();
-                duration = end - start;
-                log.info("STT 소요 시간: {}ms", duration);
-                log.info("짧은 영상 음성 변환 완료: 길이 {}", transcript.length());
-                return transcript;
+                return localWhisperService.transcribeFromUrl(presignedUrl);
             }
         } catch (Exception e) {
             log.error("짧은 영상 처리 실패: 비디오 ID {}", videoId, e);
@@ -1154,6 +1094,52 @@ public class VideoService {
             log.error("Error converting Video to DTO: {}", e.getMessage(), e);
             throw new RuntimeException("Failed to convert Video to DTO", e);
         }
+    }
+
+    public boolean checkThreadPoolCapacity() {
+        ThreadPoolExecutor executor = videoProcessingExecutor.getThreadPoolExecutor();
+
+        int activeCount = executor.getActiveCount();
+        int queueSize = executor.getQueue().size();
+        int totalLoad = activeCount + queueSize;
+        int maxCapacity = CORE_POOL_SIZE + QUEUE_CAPACITY;
+
+        double loadRatio = (double) totalLoad / maxCapacity;
+
+        log.info("스레드풀 상태 - Active: {}, Queue: {}, Total: {}/{} ({:.1f}%)",
+                activeCount, queueSize, totalLoad, maxCapacity, loadRatio * 100);
+
+        // 실험: 48/60 (80%) 미만일 때만 즉시 처리
+        boolean hasCapacity = loadRatio < CAPACITY_THRESHOLD;
+
+        if (!hasCapacity) {
+            log.warn("스레드풀 용량 부족: {}/{} (임계값: {}%)",
+                    totalLoad, maxCapacity, (int)(CAPACITY_THRESHOLD * 100));
+        }
+
+        return hasCapacity;
+    }
+
+    @Transactional
+    public Long enqueue(Long questionId, String videoKey, Boolean isOpen, Long startTime, Boolean usePresignedUrl) {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        SiteUserSecurityDTO userDetails = (SiteUserSecurityDTO) auth.getPrincipal();
+
+        VideoProcessingQueue request = VideoProcessingQueue.builder()
+                .questionId(questionId)
+                .videoKey(videoKey)
+                .isOpen(isOpen)
+                .startTime(startTime)
+                .usePresignedUrl(usePresignedUrl)
+                .username(userDetails.getUsername())
+                .build();
+
+        VideoProcessingQueue savedRequest = queueRepository.save(request);
+
+        log.info("DB 큐 저장 완료: queueId={}, videoKey={}, 현재 대기: {}개",
+                savedRequest.getId(), videoKey, queueRepository.countPendingTasks());
+
+        return savedRequest.getId();
     }
 
 }
