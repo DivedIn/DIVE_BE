@@ -15,9 +15,6 @@ https://eclectic-biscuit-0eca48.netlify.app/
 **Front-end** : <a href="https://github.com/skdltn210">고은수</a> <br>
 **Back-end** : <a href="https://github.com/minyeongg">박민영</a>
 
-## DEV Server Architecture
-<img width="912" alt="image" src="https://github.com/minyeongg/dive-server/blob/main/assets/image.png">
-
 ## Tech Stack
 **Language**
 - Java 17 <br>
