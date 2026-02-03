@@ -96,12 +96,12 @@ public class VideoService {
 
     @Async("videoProcessingExecutor")
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public CompletableFuture<Void> createInitialAsync(Long questionId, String videoKey, Boolean isOpen, long startTime, boolean presigned) {
+    public CompletableFuture<Void> createInitial(Long questionId, String videoKey, Boolean isOpen, long startTime) {
         try {
             Authentication auth = SecurityContextHolder.getContext().getAuthentication();
             SiteUserSecurityDTO userDetails = (SiteUserSecurityDTO) auth.getPrincipal();
             SiteUser user = siteUserRepository.findSiteUserByUsername(userDetails.getUsername())
-                    .orElseThrow(() -> new IllegalStateException("User not found"));
+                    .orElseThrow(() -> new IllegalStateException("사용자를 찾을 수 없습니다."));
 
             Question question = questionRepository.findById(questionId)
                     .orElseThrow(() -> new QuestionNotFoundException());
@@ -123,7 +123,7 @@ public class VideoService {
             Video savedVideo = videoRepository.save(video);
             log.info("비디오 초기 저장 완료: ID={}", savedVideo.getId());
 
-            self.processVideoAsync(savedVideo.getId(), videoKey, user.getUsername(), startTime, presigned);
+            self.processVideo(savedVideo.getId(), videoKey, user.getUsername(), startTime);
 
             return CompletableFuture.completedFuture(null);
 
@@ -133,60 +133,8 @@ public class VideoService {
         }
     }
 
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public VideoReturnDTO createInitialSync(Long questionId, String videoKey, Boolean isOpen, long startTime) {
-        try {
-            Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-            SiteUserSecurityDTO userDetails = (SiteUserSecurityDTO) auth.getPrincipal();
-            SiteUser user = siteUserRepository.findSiteUserByUsername(userDetails.getUsername())
-                    .orElseThrow(() -> new IllegalStateException("User not found"));
-
-            Question question = questionRepository.findById(questionId)
-                    .orElseThrow(() -> new QuestionNotFoundException());
-
-            // 비디오 URL 생성
-            String videoUrl = String.format("%s/%s", getS3UrlPrefix(), videoKey);
-
-            // Step 5: Video 객체 생성 및 저장
-            Video video = Video.builder()
-                    .videoPath(videoUrl)
-                    .videoName(videoKey)
-                    .siteUser(user)
-                    .question(question)
-                    .createdAt(LocalDateTime.now())
-                    .isOpen(isOpen)
-                    .processingStatus("PROCESSING")
-                    .build();
-
-            Video savedVideo = videoRepository.save(video);
-            log.info("비디오 초기 저장 완료: ID={}", savedVideo.getId());
-
-            self.processVideoSync(savedVideo.getId(), videoKey, user.getUsername(), startTime);
-
-            VideoReturnDTO videoReturnDTO = VideoReturnDTO.builder()
-                    .videoId(video.getId())
-                    .videoPath(video.getVideoPath())
-                    .videoName(video.getVideoName())
-                    .imageUrl(video.getSiteUser().getImageUrl())
-                    .username(video.getSiteUser().getUsername())
-                    .nickname(video.getSiteUser().getNickname())
-                    .thumbnail(video.getThumbnail())
-                    .question(video.getQuestion().getContents())
-                    .category(video.getQuestion().getQuestionSet().getCategory())
-                    .createdAt(video.getCreatedAt())
-                    .updatedAt(video.getUpdatedAt())
-                    .isOpen(video.isOpen())
-                    .build();
-            return videoReturnDTO;
-
-        } catch (Exception e) {
-            log.error("비디오 초기 처리 실패", e);
-            throw new RuntimeException("비디오 초기 처리에 실패했습니다", e);
-        }
-    }
-
     @Transactional(propagation = Propagation.REQUIRED) // 트랜잭션 전파 기법: 기존 트랜잭션 사용
-    public void processVideoAsync(Long videoId, String videoKey, String username, long startTime, boolean presigned) {
+    public void processVideo(Long videoId, String videoKey, String username, long startTime) {
 
         log.info("=== 영상 처리 비동기 작업 시작 - Thread: {}, videoId: {}, Queue size: {} ===",
                 Thread.currentThread().getName(), videoId, videoProcessingExecutor.getQueueSize()); //TODO: 톰캣 스레드 말고 스프링 스레드 이름 출력해야함
@@ -208,33 +156,11 @@ public class VideoService {
             long duration = end - start;
             log.info("비디오 길이 확인 소요 시간: {}ms", duration);
 
-            byte[] videoBytes = new byte[0];
-            if (!presigned) {
-                start = System.currentTimeMillis();
-                log.info("S3에서 비디오 파일 다운로드 시작: {}", videoKey);
-                GetObjectRequest getObjectRequest = GetObjectRequest.builder()
-                        .bucket(bucket)
-                        .key(videoKey)
-                        .build();
-
-                ResponseInputStream<?> s3Object = s3Client.getObject(getObjectRequest);
-                InputStream videoStream = s3Object;  // ResponseInputStream는 InputStream을 상속
-                videoBytes = IOUtils.toByteArray(videoStream);
-                log.info("S3에서 비디오 파일 다운로드 완료: {} bytes", videoBytes.length);
-                end = System.currentTimeMillis();
-                duration = end - start;
-                log.info("영상 파일 다운로드 소요 시간: {}ms", duration);
-            }
-
             // 썸네일 생성 (Presigned URL 사용)
             start = System.currentTimeMillis();
             String thumbnailKey = videoKey.replace(".webm", "-thumb.jpg");
             String thumbnailUrl = "";
-            if (presigned) {
-                thumbnailUrl = createThumbnailWithPresignedUrl(s3Client, videoKey, thumbnailKey);
-            } else {
-                thumbnailUrl = createThumbnail(videoBytes, thumbnailKey, s3Client);
-            }
+            thumbnailUrl = createThumbnailWithPresignedUrl(s3Client, videoKey, thumbnailKey);
             log.info("썸네일 생성 및 업로드 완료: {}", thumbnailUrl);
             end = System.currentTimeMillis();
             duration = end - start;
@@ -245,84 +171,6 @@ public class VideoService {
 
             // 오디오 처리
             String answer = "";
-            if (isLongVideo) {
-                log.info("긴 영상 처리: {} 초", durationInSeconds);
-                answer = processLongVideoWithPresignedUrl(s3Client, videoId, videoKey, durationInSeconds);
-            } else {
-                log.info("짧은 영상 처리: {} 초", durationInSeconds);
-                if (presigned) {
-                    answer = processShortVideoWithPresignedUrl(s3Client, videoId, videoKey);
-                } else {
-                    log.info("짧은 영상 처리 시작: 비디오 ID {}", videoId);
-                    answer = processShortVideo(videoBytes);
-                }
-            }
-
-            // 답변 유효성 검사
-            boolean isValidAnswer = isValidAnswer(answer);
-
-            log.info("답변 유효성 검사 결과: {}, 정제된 텍스트 길이: {}",
-                    isValidAnswer,
-                    answer != null ? answer.trim().length() : 0);
-
-            if (!isValidAnswer) {
-                log.warn("비디오 ID: {} 유효한 답변이 없습니다. 원본 답변: '{}'", videoId, answer);
-
-                handleInvalidAnswer(videoId, username, answer);
-                return; // 함수 종료
-            }
-
-            // 피드백 처리 및 최종 업데이트
-            handleValidAnswer(videoId, username, answer);
-
-
-            long endTime = System.currentTimeMillis(); // End time
-            long durationMs = endTime - startTime; // Total duration
-            log.info("=== 영상 처리 비동기 작업 완료 - Thread: {}, videoId: {}, Queue size: {}, 총 소요 시간: {}ms ===",
-                    Thread.currentThread().getName(), videoId, videoProcessingExecutor.getQueueSize(), durationMs);
-            threadPoolMonitor.logThreadPoolStatus("작업 완료");
-        } catch (Exception e) {
-            log.error("비디오 ID: {} 비동기 처리 중 오류 발생", videoId, e);
-            handleError(videoId, username);
-        }
-    }
-
-    @Transactional(propagation = Propagation.REQUIRED) // 트랜잭션 전파 기법: 기존 트랜잭션 사용
-    public void processVideoSync(Long videoId, String videoKey, String username, long startTime) {
-
-        log.info("=== 영상 처리 동기 작업 시작 - Thread: {}, videoId: {} ===",
-                Thread.currentThread().getName(), videoId); //TODO: 톰캣 스레드 이름 출력해야함
-
-        try {
-            // S3 클라이언트 초기화
-            AwsCredentialsProvider credentialsProvider = DefaultCredentialsProvider.create();
-            S3Client s3Client = S3Client.builder()
-                    .region(Region.AP_NORTHEAST_2)
-                    .credentialsProvider(credentialsProvider)
-                    .build();
-
-            // 비디오 길이 확인
-            long start = System.currentTimeMillis();
-            double durationInSeconds = getVideoDurationFromS3(s3Client, bucket, videoKey); // FFmpeg로 길이 확인
-            boolean isLongVideo = durationInSeconds > 300; // 5분 이상
-            long end = System.currentTimeMillis();
-            long duration = end - start;
-            log.info("비디오 길이 확인 소요 시간: {}ms", duration);
-
-            // 썸네일 생성 (Presigned URL 사용)
-            start = System.currentTimeMillis();
-            String thumbnailKey = videoKey.replace(".webm", "-thumb.jpg");
-            String thumbnailUrl = createThumbnailWithPresignedUrl(s3Client, videoKey, thumbnailKey);
-            log.info("썸네일 생성 및 업로드 완료: {}", thumbnailUrl);
-            end = System.currentTimeMillis();
-            duration = end - start;
-            log.info("썸네일 생성 소요 시간: {}ms", duration);
-
-            // 비디오 상태 업데이트
-            updateVideoThumbnailAndStatus(videoId, thumbnailUrl);
-
-            // 오디오 처리
-            String answer;
             if (isLongVideo) {
                 log.info("긴 영상 처리: {} 초", durationInSeconds);
                 answer = processLongVideoWithPresignedUrl(s3Client, videoId, videoKey, durationInSeconds);
@@ -351,11 +199,11 @@ public class VideoService {
 
             long endTime = System.currentTimeMillis(); // End time
             long durationMs = endTime - startTime; // Total duration
-            log.info("=== 영상 처리 동기 작업 완료 - Thread: {}, videoId: {}, 총 소요 시간: {}ms ===",
-                    Thread.currentThread().getName(), videoId, durationMs);
-
+            log.info("=== 영상 처리 비동기 작업 완료 - Thread: {}, videoId: {}, Queue size: {}, 총 소요 시간: {}ms ===",
+                    Thread.currentThread().getName(), videoId, videoProcessingExecutor.getQueueSize(), durationMs);
+            threadPoolMonitor.logThreadPoolStatus("작업 완료");
         } catch (Exception e) {
-            log.error("비디오 ID: {} 동기 처리 중 오류 발생", videoId, e);
+            log.error("비디오 ID: {} 비동기 처리 중 오류 발생", videoId, e);
             handleError(videoId, username);
         }
     }
@@ -436,7 +284,7 @@ public class VideoService {
     }
 
     private double getVideoDurationFromS3(S3Client s3Client, String bucket, String videoKey) {
-        log.info("비디오 길이 확인 시작 (초고속): {}", videoKey);
+        log.info("비디오 길이 확인 시작: {}", videoKey);
 
         try {
             // 1. HTTP HEAD 요청으로 파일 크기와 메타데이터만 확인 (0.2-1초)

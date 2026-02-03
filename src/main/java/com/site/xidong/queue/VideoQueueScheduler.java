@@ -18,7 +18,7 @@ public class VideoQueueScheduler {
     private final VideoProcessingQueueRepository queueRepository;
     private final VideoService videoService;
 
-    @Scheduled(fixedDelay = 2000)
+    // @Scheduled(fixedDelay = 2000)
     @Transactional
     public void processQueuedTasks() {
         try {
@@ -44,12 +44,11 @@ public class VideoQueueScheduler {
                     task.markProcessing();
                     queueRepository.save(task);
 
-                    CompletableFuture<Void> future = videoService.createInitialAsync(
+                    CompletableFuture<Void> future = videoService.createInitial(
                             task.getQuestionId(),
                             task.getVideoKey(),
                             task.getIsOpen(),
-                            task.getStartTime(),
-                            task.getUsePresignedUrl()
+                            task.getStartTime()
                     );
 
                     future.whenComplete((result, throwable) -> {

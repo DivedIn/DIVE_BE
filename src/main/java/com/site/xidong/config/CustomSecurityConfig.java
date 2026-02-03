@@ -55,9 +55,20 @@ public class CustomSecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
-        config.setAllowedOrigins(Arrays.asList("https://letsdive.netlify.app"));
+        config.setAllowedOrigins(Arrays.asList("https://letsdive.netlify.app", "http://localhost:8080", "https://exopoditic-unsalted-mabelle.ngrok-free.dev"));
         config.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS"));
-        config.setAllowedHeaders(Arrays.asList("*"));
+        config.setAllowedHeaders(Arrays.asList(
+                "Authorization",
+                "Content-Type",
+                "Accept",
+                "X-Requested-With",
+                "Origin",
+                "Access-Control-Request-Method",
+                "Access-Control-Request-Headers",
+                "Cache-Control",       // 캐싱 제어
+                "Pragma",
+                "ngrok-skip-browser-warning"
+        ));
         config.setExposedHeaders(Arrays.asList("Authorization"));
         config.setAllowCredentials(true);
 
