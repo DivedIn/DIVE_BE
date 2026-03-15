@@ -31,7 +31,6 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import software.amazon.awssdk.auth.credentials.AwsCredentialsProvider;
 import software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider;
-import software.amazon.awssdk.core.ResponseInputStream;
 import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.S3Client;
@@ -47,6 +46,8 @@ import javax.imageio.stream.FileImageOutputStream;
 import java.awt.*;
 import java.awt.image.BufferedImage;
 import java.io.*;
+import java.lang.management.ManagementFactory;
+import java.lang.management.ThreadMXBean;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
@@ -87,20 +88,15 @@ public class VideoService {
     @Autowired @Lazy
     private VideoService self;
 
-    @Autowired
-    private ThreadPoolMonitor threadPoolMonitor;
-
     private String getS3UrlPrefix() {
         return "https://" + bucket + ".s3." + region + ".amazonaws.com";
     }
 
     @Async("videoProcessingExecutor")
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public CompletableFuture<Void> createInitial(Long questionId, String videoKey, Boolean isOpen, long startTime) {
+    public CompletableFuture<Void> createInitial(String username, Long questionId, String videoKey, Boolean isOpen, long startTime) {
         try {
-            Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-            SiteUserSecurityDTO userDetails = (SiteUserSecurityDTO) auth.getPrincipal();
-            SiteUser user = siteUserRepository.findSiteUserByUsername(userDetails.getUsername())
+            SiteUser user = siteUserRepository.findSiteUserByUsername(username)
                     .orElseThrow(() -> new IllegalStateException("사용자를 찾을 수 없습니다."));
 
             Question question = questionRepository.findById(questionId)
@@ -136,11 +132,12 @@ public class VideoService {
     @Transactional(propagation = Propagation.REQUIRED) // 트랜잭션 전파 기법: 기존 트랜잭션 사용
     public void processVideo(Long videoId, String videoKey, String username, long startTime) {
 
-        log.info("=== 영상 처리 비동기 작업 시작 - Thread: {}, videoId: {}, Queue size: {} ===",
-                Thread.currentThread().getName(), videoId, videoProcessingExecutor.getQueueSize()); //TODO: 톰캣 스레드 말고 스프링 스레드 이름 출력해야함
+        String threadName = Thread.currentThread().getName();
+        log.info("[측정-시작] videoId={}, thread={}", videoId, threadName);
+
+        long procStart = System.currentTimeMillis();
 
         try {
-            threadPoolMonitor.logThreadPoolStatus("영상 처리 작업 시작");
             // S3 클라이언트 초기화
             AwsCredentialsProvider credentialsProvider = DefaultCredentialsProvider.create();
             S3Client s3Client = S3Client.builder()
@@ -154,17 +151,15 @@ public class VideoService {
             boolean isLongVideo = durationInSeconds > 300; // 5분 이상
             long end = System.currentTimeMillis();
             long duration = end - start;
-            log.info("비디오 길이 확인 소요 시간: {}ms", duration);
-
+            long afterDuration = System.currentTimeMillis() - procStart;
             // 썸네일 생성 (Presigned URL 사용)
             start = System.currentTimeMillis();
             String thumbnailKey = videoKey.replace(".webm", "-thumb.jpg");
             String thumbnailUrl = "";
             thumbnailUrl = createThumbnailWithPresignedUrl(s3Client, videoKey, thumbnailKey);
-            log.info("썸네일 생성 및 업로드 완료: {}", thumbnailUrl);
             end = System.currentTimeMillis();
             duration = end - start;
-            log.info("썸네일 생성 소요 시간: {}ms", duration);
+            long afterThumbnail = System.currentTimeMillis() - procStart;
 
             // 비디오 상태 업데이트
             updateVideoThumbnailAndStatus(videoId, thumbnailUrl);
@@ -178,6 +173,8 @@ public class VideoService {
                 log.info("짧은 영상 처리: {} 초", durationInSeconds);
                 answer = processShortVideoWithPresignedUrl(s3Client, videoId, videoKey);
             }
+
+            long afterSTT = System.currentTimeMillis() - procStart;
 
             // 답변 유효성 검사
             boolean isValidAnswer = isValidAnswer(answer);
@@ -196,12 +193,18 @@ public class VideoService {
             // 피드백 처리 및 최종 업데이트
             handleValidAnswer(videoId, username, answer);
 
+            long afterFeedback = System.currentTimeMillis() - procStart;
 
-            long endTime = System.currentTimeMillis(); // End time
-            long durationMs = endTime - startTime; // Total duration
-            log.info("=== 영상 처리 비동기 작업 완료 - Thread: {}, videoId: {}, Queue size: {}, 총 소요 시간: {}ms ===",
-                    Thread.currentThread().getName(), videoId, videoProcessingExecutor.getQueueSize(), durationMs);
-            threadPoolMonitor.logThreadPoolStatus("작업 완료");
+            ThreadMXBean threadBean = ManagementFactory.getThreadMXBean();
+            Runtime runtime = Runtime.getRuntime();
+            long heapUsed = (runtime.totalMemory() - runtime.freeMemory()) / 1024 / 1024;
+
+            long total = System.currentTimeMillis() - startTime; // 큐 대기 + 처리시간 포함
+
+            log.info("[요청별측정] videoId={}, thread={}, 길이확인={}ms, 썸네일={}ms, STT={}ms, 피드백={}ms, 총={}ms, 힙={}MB, 전체스레드수={}",
+                    videoId, threadName,
+                    afterDuration, afterThumbnail, afterSTT, afterFeedback,
+                    total, heapUsed, threadBean.getThreadCount());
         } catch (Exception e) {
             log.error("비디오 ID: {} 비동기 처리 중 오류 발생", videoId, e);
             handleError(videoId, username);
@@ -371,9 +374,6 @@ public class VideoService {
     // 짧은 비디오 처리
     private String processShortVideoWithPresignedUrl(S3Client s3Client, Long videoId, String videoKey) {
         try {
-            log.info("짧은 영상 처리 시작: 비디오 ID {}", videoId);
-            long start = System.currentTimeMillis();
-
             GetObjectRequest getObjectRequest = GetObjectRequest.builder()
                     .bucket(bucket)
                     .key(videoKey)
@@ -969,7 +969,7 @@ public class VideoService {
     }
 
     @Transactional
-    public Long enqueue(Long questionId, String videoKey, Boolean isOpen, Long startTime, Boolean usePresignedUrl) {
+    public Long enqueue(Long questionId, String videoKey, Boolean isOpen, long startTime) {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         SiteUserSecurityDTO userDetails = (SiteUserSecurityDTO) auth.getPrincipal();
 
@@ -977,9 +977,9 @@ public class VideoService {
                 .questionId(questionId)
                 .videoKey(videoKey)
                 .isOpen(isOpen)
-                .startTime(startTime)
-                .usePresignedUrl(usePresignedUrl)
                 .username(userDetails.getUsername())
+                .startTime(startTime)
+                .usePresignedUrl(true)
                 .build();
 
         VideoProcessingQueue savedRequest = queueRepository.save(request);

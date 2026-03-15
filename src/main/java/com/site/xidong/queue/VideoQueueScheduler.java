@@ -26,7 +26,7 @@ public class VideoQueueScheduler {
     private final VideoProcessingQueueRepository queueRepository;
     private final VideoService videoService;
 
-    @Scheduled(fixedDelay = 2000)
+    @Scheduled(fixedDelay = 1000)
     public void processQueuedTasks() {
         try {
             // 사용 가능한 스레드 수 계산
@@ -61,9 +61,11 @@ public class VideoQueueScheduler {
             // 상태 변경
             task.markProcessing();
             queueRepository.save(task);
+            log.info("[DB Queue] 작업 시작: ", task.getId());
 
             // 비동기 작업 제출
             CompletableFuture<Void> future = videoService.createInitial(
+                    task.getUsername(),
                     task.getQuestionId(),
                     task.getVideoKey(),
                     task.getIsOpen(),

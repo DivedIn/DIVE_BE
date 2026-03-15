@@ -24,12 +24,15 @@ public class AsyncConfig implements AsyncConfigurer {
         ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
         executor.setCorePoolSize(10);
         executor.setMaxPoolSize(10);
-        executor.setQueueCapacity(0); // Database as a queue가 큐 역할을 하므로 스레드풀에는 별도로 큐가 필요없음
+        executor.setQueueCapacity(50); // Database as a queue가 큐 역할을 하므로 스레드풀에는 별도로 큐가 필요없음
         executor.setThreadNamePrefix("VideoProcessing-");
+        /*
         executor.setRejectedExecutionHandler((r, e) -> {
             log.error("DB 큐 적용했지만 요청 유실이 발생함");
             log.error("Active: {}, Queue: {}", e.getActiveCount(), e.getQueue().size());
         });
+         */
+        executor.setRejectedExecutionHandler(new ThreadPoolExecutor.CallerRunsPolicy());
         executor.initialize();
         return executor;
     }

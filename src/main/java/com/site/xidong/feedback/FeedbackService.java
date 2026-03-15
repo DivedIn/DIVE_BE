@@ -25,10 +25,18 @@ public class FeedbackService {
     @Value("${claude.api.key}")
     private String API_KEY;
 
+    @Value("${claude.mock.enabled}")
+    private boolean mockEnabled;
+
     private final VideoRepository videoRepository;
     private final FeedbackRepository feedbackRepository;
 
     public FeedbackReturnDTO getFeedback(AnswerDTO answerDTO) throws Exception { //TODO: WebClient으로 변경하기
+
+        if (mockEnabled) {
+            log.info("부하테스트 모드: Claude API 호출 생략");
+            return getMockFeedback(answerDTO);
+        }
         Video video = videoRepository.findById(answerDTO.getVideoId()).orElse(null);
         String question = video.getQuestion().getContents();
         String answer = answerDTO.getAnswer();
@@ -115,6 +123,59 @@ public class FeedbackService {
             }
             throw e;
         }
+    }
+
+    private FeedbackReturnDTO getMockFeedback(AnswerDTO answerDTO) throws Exception {
+        Video video = videoRepository.findById(answerDTO.getVideoId())
+                .orElseThrow(() -> new Exception("비디오를 찾을 수 없습니다: " + answerDTO.getVideoId()));
+
+        String question = video.getQuestion().getContents();
+
+        // 실제 Claude 응답과 유사한 Mock 피드백
+        String mockContent = String.format("""
+                ### 내용 측면 피드백
+                
+                **강점:**
+                - 질문 "%s"에 대한 핵심 개념을 정확히 이해하고 있습니다.
+                - 실무 경험을 바탕으로 한 구체적인 예시가 답변의 신뢰도를 높였습니다.
+                - 기술적 깊이와 실용성의 균형이 좋습니다.
+                
+                **개선점:**
+                - 좀 더 구조화된 답변 (예: 정의 → 장단점 → 사용 사례)으로 전개하면 더 명확할 것입니다.
+                - 최신 트렌드나 대안 기술에 대한 언급이 추가되면 좋겠습니다.
+                
+                ### 전달력 측면 피드백
+                
+                **강점:**
+                - 논리적인 흐름으로 청자의 이해를 돕는 구조입니다.
+                - 적절한 발화 속도와 명확한 발음으로 전달력이 우수합니다.
+                
+                **개선점:**
+                - 중요한 포인트에서 강조나 휴지(pause)를 활용하면 더 효과적일 것입니다.
+                - 약간의 필러워드("음", "아")가 있으나 전반적으로 자연스럽습니다.
+                
+                **종합 평가:** 면접 답변으로서 매우 우수한 수준입니다. 실무 투입이 가능한 역량을 보여주고 있습니다.
+                
+                ---
+                """, question);
+
+        // 실제 처리 시뮬레이션 (약간의 지연)
+        Thread.sleep(20000);  // 실제 Claude API 호출 시간 시뮬레이션
+
+        // DB 저장 (실제와 동일)
+        Feedback feedback = Feedback.builder()
+                .contents(mockContent)
+                .createdAt(LocalDateTime.now())
+                .video(video)
+                .build();
+        feedbackRepository.save(feedback);
+
+        return FeedbackReturnDTO.builder()
+                .feedbackId(feedback.getId())
+                .videoId(video.getId())
+                .contents(feedback.getContents())
+                .createdAt(feedback.getCreatedAt())
+                .build();
     }
 
     public Feedback findFeedback(Long feedbackId) throws Exception {

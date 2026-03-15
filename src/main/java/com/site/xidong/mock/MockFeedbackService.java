@@ -28,7 +28,7 @@ public class MockFeedbackService {
                 videoProcessingExecutor.getQueueCapacity(), Thread.currentThread().getName());
 
         try {
-            Thread.sleep(120_000);
+            Thread.sleep(30000);
             log.info("[요청 {}] 완료", reqNum);
         } catch (InterruptedException e) {
             log.error("[요청 {}] 중단됨", reqNum);

@@ -1,5 +1,6 @@
 package com.site.xidong.video;
 
+import com.site.xidong.security.SiteUserSecurityDTO;
 import com.site.xidong.utils.S3Uploader;
 import io.micrometer.core.annotation.Timed;
 import lombok.extern.log4j.Log4j2;
@@ -9,6 +10,8 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -23,12 +26,9 @@ public class VideoController {
     private final S3Uploader s3Uploader;
     private final VideoService videoService;
     private final ThreadPoolTaskExecutor executor;
+    @Value("${db.queue.enabled}")
+    private boolean useDbQueue;
 
-    @Value("${video.processing.use-presigned-url}")
-    private boolean usePresignedUrl;
-
-    @Value("${video.processing.async-enabled}")
-    private boolean asyncEnabled;
 
     public VideoController(S3Uploader s3Uploader, VideoService videoService, @Qualifier("threadPoolTaskExecutor") ThreadPoolTaskExecutor executor) {
         this.s3Uploader = s3Uploader;
@@ -61,22 +61,30 @@ public class VideoController {
 
         try {
             //DB 큐에 저장
-            log.warn("DB 큐에 요청 저장");
+            if (!useDbQueue) {
+                Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+                SiteUserSecurityDTO userDetails = (SiteUserSecurityDTO) auth.getPrincipal();
+                CompletableFuture<Void> result = videoService.createInitial(userDetails.getUsername(), request.getQuestionId(), request.getVideoKey(), false, startTime);
+                return ResponseEntity.accepted()
+                        .body(Map.of("mode", "일반 모드"));
+            } else {
+                log.warn("DB 큐에 요청 저장");
 
-            Long queueId = videoService.enqueue(
-                    request.getQuestionId(),
-                    request.getVideoKey(),
-                    request.isOpen(),
-                    startTime,
-                    usePresignedUrl
-            );
+                Long queueId = videoService.enqueue(
+                        request.getQuestionId(),
+                        request.getVideoKey(),
+                        request.isOpen(),
+                        startTime
+                );
 
-            return ResponseEntity.accepted()
-                    .body(Map.of(
-                            "status", "queued",
-                            "queueId", queueId.toString(),
-                            "message", "요청이 메시지 큐에 추가되었습니다"
-                    ));
+                return ResponseEntity.accepted()
+                        .body(Map.of(
+                                "status", "queued",
+                                "queueId", queueId.toString(),
+                                "message", "요청이 메시지 큐에 추가되었습니다"
+                        ));
+            }
+
 
         } catch (Exception e) {
             log.error("요청 처리 실패", e);
