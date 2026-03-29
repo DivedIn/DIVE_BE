@@ -6,5 +6,6 @@ import lombok.Data;
 public class VideoUploadCompleteRequest {
     private Long questionId;
     private String videoKey;
+    private int requestNo;
     private boolean isOpen;
 }

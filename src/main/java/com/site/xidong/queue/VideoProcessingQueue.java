@@ -21,6 +21,9 @@ public class VideoProcessingQueue {
     private Long questionId;
 
     @Column(nullable = false)
+    private int requestNo;
+
+    @Column(nullable = false)
     private String videoKey;
 
     @Column(nullable = false)
@@ -49,9 +52,10 @@ public class VideoProcessingQueue {
     private Integer retryCount = 0;
 
     @Builder
-    public VideoProcessingQueue(Long questionId, String videoKey, Boolean isOpen,
+    public VideoProcessingQueue(Long questionId, int requestNo, String videoKey, Boolean isOpen,
                                 Long startTime, Boolean usePresignedUrl, String username) {
         this.questionId = questionId;
+        this.requestNo = requestNo;
         this.videoKey = videoKey;
         this.isOpen = isOpen;
         this.startTime = startTime;

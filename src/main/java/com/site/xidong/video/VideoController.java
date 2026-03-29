@@ -56,15 +56,13 @@ public class VideoController {
             @RequestBody VideoUploadCompleteRequest request) {
 
         long startTime = System.currentTimeMillis();
-        log.info("요청 접수: [{}], Tomcat Thread: {}",
-                request, Thread.currentThread().getName());
 
         try {
             //DB 큐에 저장
             if (!useDbQueue) {
                 Authentication auth = SecurityContextHolder.getContext().getAuthentication();
                 SiteUserSecurityDTO userDetails = (SiteUserSecurityDTO) auth.getPrincipal();
-                CompletableFuture<Void> result = videoService.createInitial(userDetails.getUsername(), request.getQuestionId(), request.getVideoKey(), false, startTime);
+                CompletableFuture<Void> result = videoService.createInitial(userDetails.getUsername(), request.getQuestionId(), request.getRequestNo(), request.getVideoKey(), false, startTime);
                 return ResponseEntity.accepted()
                         .body(Map.of("mode", "일반 모드"));
             } else {
@@ -72,6 +70,7 @@ public class VideoController {
 
                 Long queueId = videoService.enqueue(
                         request.getQuestionId(),
+                        request.getRequestNo(),
                         request.getVideoKey(),
                         request.isOpen(),
                         startTime
@@ -92,8 +91,6 @@ public class VideoController {
                     .body(Map.of("error", e.getMessage()));
         } finally {
             long duration = System.currentTimeMillis() - startTime;
-            log.info("Tomcat 요청 처리 완료: 처리 시간: {}ms, 활성: {}, 큐: {}",
-                    duration, executor.getActiveCount(), executor.getQueueSize());
         }
     }
 

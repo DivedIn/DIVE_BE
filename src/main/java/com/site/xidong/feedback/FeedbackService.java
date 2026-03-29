@@ -130,6 +130,7 @@ public class FeedbackService {
                 .orElseThrow(() -> new Exception("비디오를 찾을 수 없습니다: " + answerDTO.getVideoId()));
 
         String question = video.getQuestion().getContents();
+        long acceptedAt = System.currentTimeMillis();
 
         // 실제 Claude 응답과 유사한 Mock 피드백
         String mockContent = String.format("""

@@ -21,6 +21,8 @@ import org.bytedeco.javacv.Java2DFrameConverter;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.web.embedded.tomcat.TomcatWebServer;
+import org.springframework.boot.web.servlet.context.ServletWebServerApplicationContext;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
@@ -85,6 +87,9 @@ public class VideoService {
     @Qualifier("threadPoolTaskExecutor")
     private ThreadPoolTaskExecutor videoProcessingExecutor;
 
+    @Autowired
+    private ServletWebServerApplicationContext context;
+
     @Autowired @Lazy
     private VideoService self;
 
@@ -94,7 +99,7 @@ public class VideoService {
 
     @Async("videoProcessingExecutor")
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public CompletableFuture<Void> createInitial(String username, Long questionId, String videoKey, Boolean isOpen, long startTime) {
+    public CompletableFuture<Void> createInitial(String username, Long questionId, int requestNo, String videoKey, Boolean isOpen, long startTime) {
         try {
             SiteUser user = siteUserRepository.findSiteUserByUsername(username)
                     .orElseThrow(() -> new IllegalStateException("사용자를 찾을 수 없습니다."));
@@ -119,7 +124,7 @@ public class VideoService {
             Video savedVideo = videoRepository.save(video);
             log.info("비디오 초기 저장 완료: ID={}", savedVideo.getId());
 
-            self.processVideo(savedVideo.getId(), videoKey, user.getUsername(), startTime);
+            self.processVideo(savedVideo.getId(), requestNo, videoKey, user.getUsername(), startTime);
 
             return CompletableFuture.completedFuture(null);
 
@@ -130,10 +135,7 @@ public class VideoService {
     }
 
     @Transactional(propagation = Propagation.REQUIRED) // 트랜잭션 전파 기법: 기존 트랜잭션 사용
-    public void processVideo(Long videoId, String videoKey, String username, long startTime) {
-
-        String threadName = Thread.currentThread().getName();
-        log.info("[측정-시작] videoId={}, thread={}", videoId, threadName);
+    public void processVideo(Long videoId, int requestNo, String videoKey, String username, long startTime) {
 
         long procStart = System.currentTimeMillis();
 
@@ -195,16 +197,34 @@ public class VideoService {
 
             long afterFeedback = System.currentTimeMillis() - procStart;
 
-            ThreadMXBean threadBean = ManagementFactory.getThreadMXBean();
-            Runtime runtime = Runtime.getRuntime();
-            long heapUsed = (runtime.totalMemory() - runtime.freeMemory()) / 1024 / 1024;
+            long completedAt = System.currentTimeMillis();
+            String threadName = Thread.currentThread().getName();
+            String threadType = threadName.contains("http-nio") ? "Tomcat" : "Java";
 
-            long total = System.currentTimeMillis() - startTime; // 큐 대기 + 처리시간 포함
+            int poolSize = 0; int activeCount = 0;
+            if (threadType.equals("Tomcat")) {
+                TomcatWebServer tomcatWebServer = (TomcatWebServer) context.getWebServer();
+                ThreadPoolExecutor tomcatExecutor = (ThreadPoolExecutor) tomcatWebServer
+                        .getTomcat()
+                        .getConnector()
+                        .getProtocolHandler()
+                        .getExecutor();
 
-            log.info("[요청별측정] videoId={}, thread={}, 길이확인={}ms, 썸네일={}ms, STT={}ms, 피드백={}ms, 총={}ms, 힙={}MB, 전체스레드수={}",
-                    videoId, threadName,
-                    afterDuration, afterThumbnail, afterSTT, afterFeedback,
-                    total, heapUsed, threadBean.getThreadCount());
+                poolSize = tomcatExecutor.getPoolSize();
+                activeCount = tomcatExecutor.getActiveCount();
+            } else {
+                poolSize = videoProcessingExecutor.getPoolSize();
+                activeCount = videoProcessingExecutor.getActiveCount();
+            }
+            log.info("videoId={}, requestNo={}, thread={}, threadType={}," +
+                            " poolSize={}, activeCount={}," +
+                            " acceptedAt={}, completedAt={}, duration={}ms, heap={}MB",
+                    videoId, requestNo, threadName, threadType,
+                    poolSize,
+                    activeCount,
+                    startTime, completedAt, (completedAt - startTime),
+                    (Runtime.getRuntime().totalMemory()
+                            - Runtime.getRuntime().freeMemory()) / 1024 / 1024); //근사값
         } catch (Exception e) {
             log.error("비디오 ID: {} 비동기 처리 중 오류 발생", videoId, e);
             handleError(videoId, username);
@@ -969,12 +989,13 @@ public class VideoService {
     }
 
     @Transactional
-    public Long enqueue(Long questionId, String videoKey, Boolean isOpen, long startTime) {
+    public Long enqueue(Long questionId, int requestNo, String videoKey, Boolean isOpen, long startTime) {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         SiteUserSecurityDTO userDetails = (SiteUserSecurityDTO) auth.getPrincipal();
 
         VideoProcessingQueue request = VideoProcessingQueue.builder()
                 .questionId(questionId)
+                .requestNo(requestNo)
                 .videoKey(videoKey)
                 .isOpen(isOpen)
                 .username(userDetails.getUsername())

@@ -67,6 +67,7 @@ public class VideoQueueScheduler {
             CompletableFuture<Void> future = videoService.createInitial(
                     task.getUsername(),
                     task.getQuestionId(),
+                    task.getRequestNo(),
                     task.getVideoKey(),
                     task.getIsOpen(),
                     task.getStartTime()
