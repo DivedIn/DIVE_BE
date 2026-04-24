@@ -22,38 +22,38 @@ Java 17, Spring Boot 3.3, Spring Data JPA, MySQL 8.0, AWS EC2, Github Actions, S
 
 ### 면접 질문 목록
 > 공개된 면접 질문 목록을 조회하고, 카테고리별로 탐색하거나 원하는 질문을 내 세트에 추가할 수 있는 화면입니다.
-<img src="https://github.com/minyeongg/dive-server/blob/main/assets/dive_erd.png">
+<img src="https://github.com/minyeongg/dive-server/blob/main/assets/question.png">
 
 ---
 
 ### 면접 질문 상세
-<img src="https://github.com/minyeongg/dive-server/blob/main/assets/dive_erd.png">
+<img src="https://github.com/minyeongg/dive-server/blob/main/assets/questionSet.png">
 
 ---
 
 ### 면접 연습 영상 녹화
 > 모의 면접 화면입니다.
 
-<img src="https://github.com/minyeongg/dive-server/blob/main/assets/dive_erd.png">
+<img src="https://github.com/minyeongg/dive-server/blob/main/assets/image.png">
 
 ---
 
 ### 내 녹화 영상 목록
-> 내가 녹화한 면접 답변 영상들을 모아볼 수 있는 화면입니다. 각 영상에 대한 AI 피드백 생성 여부와 상태를 확인할 수 있습니다.
+> 내가 녹화한 면접 답변 영상들을 모아볼 수 있는 화면입니다.
 
-<img src="https://github.com/minyeongg/dive-server/blob/main/assets/dive_erd.png">
+<img src="https://github.com/minyeongg/dive-server/blob/main/assets/list.jpeg">
 
 ---
 
 ### AI 피드백 결과
 > 녹화된 답변 영상을 STT(음성→텍스트)로 변환한 후, Claude API를 통해 내용 전달력·논리 구성 측면의 피드백을 생성하고 결과를 보여주는 화면입니다.
 
-<img src="https://github.com/minyeongg/dive-server/blob/main/assets/dive_erd.png">
+<img src="https://github.com/minyeongg/dive-server/blob/main/assets/feedback.png">
 
 ---
 
 ## 시스템 아키텍처
-<img src="https://github.com/minyeongg/dive-server/blob/main/assets/dive_erd.png">
+<img src="https://github.com/minyeongg/dive-server/blob/main/assets/dive_service_architecture.drawio_(1).png">
 
 ## 패키지 구조
 
