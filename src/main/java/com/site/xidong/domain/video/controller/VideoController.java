@@ -17,11 +17,11 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
-import import com.site.xidong.domain.video.service.VideoService;;
-import import com.site.xidong.domain.video.dto.VideoReturnDTO;;
-import import com.site.xidong.domain.video.dto.VideoUploadCompleteRequest;;
-import import com.site.xidong.domain.video.dto.VideoWithFeedbackDTO;;
-import import com.site.xidong.domain.video.entity.Video;;
+import com.site.xidong.domain.video.service.VideoService;
+import com.site.xidong.domain.video.dto.VideoReturnDTO;
+import com.site.xidong.domain.video.dto.VideoUploadCompleteRequest;
+import com.site.xidong.domain.video.dto.VideoWithFeedbackDTO;
+import com.site.xidong.domain.video.entity.Video;
 
 @RestController
 @Log4j2
@@ -123,7 +123,7 @@ public class VideoController {
     }
 
     @PutMapping("/{videoId}/change/visibility")
-    public ResponseEntity<?> change(@PathVariable Long videoId, @RequestBody Boolean isOpen) throws Exception {
+    public ResponseEntity<?> change(@PathVariable Long videoId, @RequestBody Boolean isOpen) {
         try {
             videoService.changeVisibility(videoId, isOpen);
         } catch (Exception e) {
@@ -133,7 +133,7 @@ public class VideoController {
     }
 
     @DeleteMapping("/{videoId}/delete")
-    public ResponseEntity<?> delete(@PathVariable Long videoId) throws Exception {
+    public ResponseEntity<?> delete(@PathVariable Long videoId) {
         try {
             videoService.deleteVideo(videoId);
         } catch (Exception e) {

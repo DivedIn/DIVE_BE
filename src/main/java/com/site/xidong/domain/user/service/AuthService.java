@@ -11,12 +11,12 @@ import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
 import java.util.Optional;
-import import com.site.xidong.domain.user.service.KakaoUtil;;
-import import com.site.xidong.domain.user.dto.KakaoDTO;;
-import import com.site.xidong.domain.user.service.NaverUtil;;
-import import com.site.xidong.domain.user.dto.NaverDTO;;
-import import com.site.xidong.global.jwt.JwtTokenProvider;;
-import import com.site.xidong.domain.user.dto.Token;;
+import com.site.xidong.domain.user.service.KakaoUtil;
+import com.site.xidong.domain.user.dto.KakaoDTO;
+import com.site.xidong.domain.user.service.NaverUtil;
+import com.site.xidong.domain.user.dto.NaverDTO;
+import com.site.xidong.global.jwt.JwtTokenProvider;
+import com.site.xidong.domain.user.dto.Token;
 
 @Service
 @RequiredArgsConstructor
@@ -28,7 +28,7 @@ public class AuthService {
     private final JwtTokenProvider jwtTokenProvider;
     private final PasswordEncoder passwordEncoder;
 
-    public KakaoDTO.OAuthToken oAuthLogin(String accessCode) throws Exception {
+    public KakaoDTO.OAuthToken oAuthLogin(String accessCode) {
         KakaoDTO.OAuthToken oAuthToken = kakaoUtil.requestToken(accessCode);
         KakaoDTO.KakaoProfile kakaoProfile = kakaoUtil.requestProfile(oAuthToken);
         String kakaoId = String.valueOf(kakaoProfile.getId()); // 카카오 고유 ID 사용
@@ -75,7 +75,7 @@ public class AuthService {
         return oAuthToken;
     }
 
-        public NaverDTO.OAuthToken naverLogin(String accessCode, String state) throws Exception {
+        public NaverDTO.OAuthToken naverLogin(String accessCode, String state) {
             NaverDTO.OAuthToken oAuthToken = naverUtil.requestToken(accessCode, state);
             NaverDTO.NaverProfile naverProfile = naverUtil.requestProfile(oAuthToken);
             String naverId = naverProfile.getResponse().getId(); // 네이버 고유 ID 사용

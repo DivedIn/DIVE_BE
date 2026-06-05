@@ -9,9 +9,9 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
-import import com.site.xidong.domain.question.service.QuestionService;;
-import import com.site.xidong.domain.question.dto.QuestionReturnDTO;;
-import import com.site.xidong.domain.question.exception.QuestionNotFoundException;;
+import com.site.xidong.domain.question.service.QuestionService;
+import com.site.xidong.domain.question.dto.QuestionReturnDTO;
+import com.site.xidong.domain.question.exception.QuestionNotFoundException;
 
 @RequiredArgsConstructor
 @RestController
@@ -21,7 +21,7 @@ public class QuestionController {
     private final QuestionService questionService;
 
     @PostMapping("/{setId}/create")
-    public ResponseEntity<QuestionReturnDTO> create(@PathVariable Long setId, String contents) throws Exception, QuestionSetNotFoundException {
+    public ResponseEntity<QuestionReturnDTO> create(@PathVariable Long setId, String contents) {
         QuestionReturnDTO questionReturnDTO;
         try {
            questionReturnDTO = questionService.create(setId, contents);
@@ -34,7 +34,7 @@ public class QuestionController {
     }
 
     @PutMapping("/{setId}/{id}/update")
-    public ResponseEntity<QuestionReturnDTO> update(@PathVariable Long setId, @PathVariable Long id, String contents)  throws Exception, QuestionNotFoundException {
+    public ResponseEntity<QuestionReturnDTO> update(@PathVariable Long setId, @PathVariable Long id, String contents)  {
         QuestionReturnDTO questionReturnDTO;
         try {
             questionReturnDTO = questionService.update(setId, id, contents);
@@ -48,7 +48,7 @@ public class QuestionController {
     }
 
     @DeleteMapping("/{setId}/delete")
-    public ResponseEntity<?> delete(@PathVariable Long setId, @RequestBody List<Long> questionIds) throws Exception, QuestionNotFoundException {
+    public ResponseEntity<?> delete(@PathVariable Long setId, @RequestBody List<Long> questionIds) {
         try {
             questionService.delete(setId, questionIds);
         } catch (QuestionNotFoundException e) {

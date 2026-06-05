@@ -6,6 +6,8 @@ import com.site.xidong.domain.question.dto.QuestionReturnDTO;
 import com.site.xidong.domain.user.dto.SiteUserSecurityDTO;
 import com.site.xidong.domain.user.entity.SiteUser;
 import com.site.xidong.domain.user.repository.SiteUserRepository;
+import com.site.xidong.global.exception.CustomException;
+import com.site.xidong.global.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.security.core.Authentication;
@@ -16,11 +18,12 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
-import import com.site.xidong.domain.questionset.entity.QuestionSet;;
-import import com.site.xidong.domain.questionset.dto.QuestionSetReturnDTO;;
-import import com.site.xidong.domain.questionset.dto.QuestionSetCreateDTO;;
-import import com.site.xidong.domain.questionset.dto.QuestionSetUpdateDTO;;
-import import com.site.xidong.domain.questionset.exception.QuestionSetNotFoundException;;
+import com.site.xidong.domain.questionset.entity.QuestionSet;
+import com.site.xidong.domain.questionset.repository.QuestionSetRepository;
+import com.site.xidong.domain.questionset.dto.QuestionSetReturnDTO;
+import com.site.xidong.domain.questionset.dto.QuestionSetCreateDTO;
+import com.site.xidong.domain.questionset.dto.QuestionSetUpdateDTO;
+import com.site.xidong.domain.questionset.exception.QuestionSetNotFoundException;
 
 @Log4j2
 @Service
@@ -116,7 +119,7 @@ public class QuestionSetService {
         return questionSetReturnDTOS;
     }
 
-    public QuestionSetReturnDTO updateQuestionSet(Long setId, QuestionSetUpdateDTO questionSetUpdateDTO) throws Exception {
+    public QuestionSetReturnDTO updateQuestionSet(Long setId, QuestionSetUpdateDTO questionSetUpdateDTO) {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         SiteUserSecurityDTO siteUserSecurityDTO = (SiteUserSecurityDTO) auth.getPrincipal();
         SiteUser siteUser = siteUserRepository.findSiteUserByUsername(siteUserSecurityDTO.getUsername()).get();
@@ -127,7 +130,7 @@ public class QuestionSetService {
         if(questionSet.isPresent()) {
             target = questionSet.get();
             if(!target.getSiteUser().getUsername().equals(siteUser.getUsername())) {
-                throw new Exception("수정 권한이 없습니다.");
+                throw new CustomException(ErrorCode.FORBIDDEN);
             } else {
                 target.setTitle(questionSetUpdateDTO.getTitle());
                 target.setDescription(questionSetUpdateDTO.getDescription());
@@ -138,7 +141,7 @@ public class QuestionSetService {
                 return questionSetReturnDTO;
             }
         } else {
-            throw new QuestionSetNotFoundException("면접세트를 찾을 수 없습니다.");
+            throw new QuestionSetNotFoundException();
         }
     }
 
@@ -165,7 +168,7 @@ public class QuestionSetService {
         return questionSetReturnDTO;
     }
 
-    public void delete(Long setId) throws Exception {
+    public void delete(Long setId) {
         Optional<QuestionSet> selectedSet = questionSetRepository.findById(setId);
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         SiteUserSecurityDTO siteUserSecurityDTO = (SiteUserSecurityDTO) auth.getPrincipal();
@@ -173,12 +176,12 @@ public class QuestionSetService {
         if(selectedSet.isPresent()) {
             QuestionSet questionSet = selectedSet.get();
             if(!siteUser.getUsername().equals(questionSet.getSiteUser().getUsername())) {
-                throw new Exception("삭제 권한이 없습니다.");
+                throw new CustomException(ErrorCode.FORBIDDEN);
             } else {
                 questionSetRepository.delete(questionSet);
             }
         } else {
-            throw new QuestionSetNotFoundException("면접세트를 찾을 수 없습니다.");
+            throw new QuestionSetNotFoundException();
         }
     }
 

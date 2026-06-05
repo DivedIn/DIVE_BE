@@ -9,8 +9,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.web.bind.annotation.*;
-import import com.site.xidong.domain.user.service.SiteUserService;;
-import import com.site.xidong.domain.user.dto.SiteUserDTO;;
+import com.site.xidong.domain.user.service.SiteUserService;
+import com.site.xidong.domain.user.dto.SiteUserDTO;
 
 @RequiredArgsConstructor
 @RestController
@@ -20,7 +20,7 @@ public class SiteUserController {
     private final SiteUserService siteUserService;
 
     @PostMapping("/signup")
-    public ResponseEntity<Token> join(@RequestBody SiteUserJoinDTO siteUserJoinDTO) throws Exception {
+    public ResponseEntity<Token> join(@RequestBody SiteUserJoinDTO siteUserJoinDTO) {
         Token jwtToken;
         try {
             jwtToken = siteUserService.join(siteUserJoinDTO);

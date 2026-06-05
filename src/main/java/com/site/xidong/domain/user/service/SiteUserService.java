@@ -5,6 +5,8 @@ import com.site.xidong.domain.user.dto.SiteUserJoinDTO;
 import com.site.xidong.domain.user.dto.SiteUserLoginDTO;
 import com.site.xidong.domain.user.dto.SiteUserSecurityDTO;
 import com.site.xidong.global.jwt.JwtTokenProvider;
+import com.site.xidong.global.exception.CustomException;
+import com.site.xidong.global.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.security.core.Authentication;
@@ -18,11 +20,11 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
-import import com.site.xidong.domain.user.entity.SiteUser;;
-import import com.site.xidong.domain.user.entity.LoginMethod;;
-import import com.site.xidong.domain.user.entity.Role;;
-import import com.site.xidong.domain.user.repository.SiteUserRepository;;
-import import com.site.xidong.domain.user.dto.SiteUserDTO;;
+import com.site.xidong.domain.user.entity.SiteUser;
+import com.site.xidong.domain.user.entity.LoginMethod;
+import com.site.xidong.domain.user.entity.Role;
+import com.site.xidong.domain.user.repository.SiteUserRepository;
+import com.site.xidong.domain.user.dto.SiteUserDTO;
 
 @Log4j2
 @Service
@@ -32,20 +34,20 @@ public class SiteUserService {
     private final PasswordEncoder passwordEncoder;
     private final JwtTokenProvider jwtTokenProvider;
 
-    public Token join(SiteUserJoinDTO siteUserJoinDTO) throws Exception {
+    public Token join(SiteUserJoinDTO siteUserJoinDTO) {
         String username = siteUserJoinDTO.getUsername();
         Optional<SiteUser> target = siteUserRepository.findSiteUserByUsername(username);
         if(!target.isEmpty()) {
-            throw new Exception("이미 사용 중인 아이디입니다.");
+            throw new CustomException(ErrorCode.DUPLICATE_RESOURCE);
         }
         String email = siteUserJoinDTO.getEmail();
         Optional<SiteUser> exist = siteUserRepository.findSiteUserByEmail(email);
         if(!exist.isEmpty() && exist.get().getLoginMethod().equals(LoginMethod.GENERAL)) {
-            throw new Exception("이미 해당 이메일로 가입된 계정이 있습니다.");
+            throw new CustomException(ErrorCode.EMAIL_ALREADY_EXISTS);
         } else if(!exist.isEmpty() && exist.get().getLoginMethod().equals(LoginMethod.KAKAO)) {
-            throw new Exception("이미 카카오로 가입하셨습니다.");
+            throw new CustomException(ErrorCode.USER_ALREADY_EXIST);
         }  else if(!exist.isEmpty() && exist.get().getLoginMethod().equals(LoginMethod.NAVER)) {
-            throw new Exception("이미 네이버로 가입하셨습니다.");
+            throw new CustomException(ErrorCode.USER_ALREADY_EXIST);
         }
         SiteUser siteUser = SiteUser.builder()
                 .username(siteUserJoinDTO.getUsername())
@@ -78,7 +80,7 @@ public class SiteUserService {
             throw new UsernameNotFoundException("사용자를 찾을 수 없습니다.");
         }
         if(!passwordEncoder.matches(siteUserLoginDTO.getPassword(), exist.get().getPassword())) {
-            throw new Exception("비밀번호가 틀렸습니다.");
+            throw new CustomException(ErrorCode.INVALID_PASSWORD);
         }
         Token jwtToken = jwtTokenProvider.createToken(exist.get().getUsername(), exist.get().getRoles());
         String accessToken = jwtToken.getAccessToken();

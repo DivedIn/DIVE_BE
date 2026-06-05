@@ -5,7 +5,11 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.site.xidong.domain.video.entity.Video;
 import com.site.xidong.domain.video.repository.VideoRepository;
+import com.site.xidong.domain.feedback.repository.FeedbackRepository;
+import com.site.xidong.global.exception.CustomException;
+import com.site.xidong.global.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
+import lombok.SneakyThrows;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -16,9 +20,9 @@ import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.time.LocalDateTime;
-import import com.site.xidong.domain.feedback.entity.Feedback;;
-import import com.site.xidong.domain.feedback.dto.AnswerDTO;;
-import import com.site.xidong.domain.feedback.dto.FeedbackReturnDTO;;
+import com.site.xidong.domain.feedback.entity.Feedback;
+import com.site.xidong.domain.feedback.dto.AnswerDTO;
+import com.site.xidong.domain.feedback.dto.FeedbackReturnDTO;
 
 
 @Log4j2
@@ -34,7 +38,8 @@ public class FeedbackService {
     private final VideoRepository videoRepository;
     private final FeedbackRepository feedbackRepository;
 
-    public FeedbackReturnDTO getFeedback(AnswerDTO answerDTO) throws Exception { //TODO: WebClient으로 변경하기
+    @SneakyThrows
+    public FeedbackReturnDTO getFeedback(AnswerDTO answerDTO) { //TODO: WebClient으로 변경하기
 
         if (mockEnabled) {
             log.info("부하테스트 모드: Claude API 호출 생략");
@@ -128,9 +133,10 @@ public class FeedbackService {
         }
     }
 
-    private FeedbackReturnDTO getMockFeedback(AnswerDTO answerDTO) throws Exception {
+    @SneakyThrows
+    private FeedbackReturnDTO getMockFeedback(AnswerDTO answerDTO) {
         Video video = videoRepository.findById(answerDTO.getVideoId())
-                .orElseThrow(() -> new Exception("비디오를 찾을 수 없습니다: " + answerDTO.getVideoId()));
+                .orElseThrow(() -> new CustomException(ErrorCode.VIDEO_NOT_FOUND));
 
         String question = video.getQuestion().getContents();
         long acceptedAt = System.currentTimeMillis();
@@ -182,7 +188,7 @@ public class FeedbackService {
                 .build();
     }
 
-    public Feedback findFeedback(Long feedbackId) throws Exception {
+    public Feedback findFeedback(Long feedbackId) {
         Feedback feedback = feedbackRepository.findById(feedbackId).orElse(null);
         return feedback;
     }

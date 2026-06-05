@@ -11,10 +11,10 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.oauth2.core.OAuth2AuthenticationException;
 import org.springframework.web.bind.annotation.*;
-import import com.site.xidong.domain.user.service.AuthService;;
-import import com.site.xidong.domain.user.dto.KakaoDTO;;
-import import com.site.xidong.domain.user.dto.NaverDTO;;
-import import com.site.xidong.domain.user.dto.Token;;
+import com.site.xidong.domain.user.service.AuthService;
+import com.site.xidong.domain.user.dto.KakaoDTO;
+import com.site.xidong.domain.user.dto.NaverDTO;
+import com.site.xidong.domain.user.dto.Token;
 
 @RequiredArgsConstructor
 @RestController

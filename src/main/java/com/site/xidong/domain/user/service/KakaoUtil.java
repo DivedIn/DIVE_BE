@@ -12,7 +12,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestTemplate;
-import import com.site.xidong.domain.user.dto.KakaoDTO;;
+import com.site.xidong.domain.user.dto.KakaoDTO;
 
 @Component
 @Slf4j

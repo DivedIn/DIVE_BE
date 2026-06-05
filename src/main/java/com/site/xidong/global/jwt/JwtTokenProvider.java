@@ -22,7 +22,7 @@ import java.util.Base64;
 import java.util.Date;
 import java.util.List;
 import java.util.Set;
-import import com.site.xidong.domain.user.dto.Token;;
+import com.site.xidong.domain.user.dto.Token;
 
 @RequiredArgsConstructor
 @Component

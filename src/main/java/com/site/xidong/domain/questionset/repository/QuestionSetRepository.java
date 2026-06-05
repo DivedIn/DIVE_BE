@@ -5,7 +5,7 @@ import org.springframework.data.jpa.repository.Query;
 
 import java.util.List;
 import java.util.Optional;
-import import com.site.xidong.domain.questionset.entity.QuestionSet;;
+import com.site.xidong.domain.questionset.entity.QuestionSet;
 
 public interface QuestionSetRepository extends JpaRepository<QuestionSet, Long> {
     @Query("SELECT q FROM QuestionSet q WHERE q.isOpen = true")

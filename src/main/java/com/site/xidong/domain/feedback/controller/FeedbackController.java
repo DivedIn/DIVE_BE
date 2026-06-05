@@ -5,9 +5,9 @@ import lombok.extern.log4j.Log4j2;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-import import com.site.xidong.domain.feedback.service.FeedbackService;;
-import import com.site.xidong.domain.feedback.dto.FeedbackReturnDTO;;
-import import com.site.xidong.domain.feedback.dto.AnswerDTO;;
+import com.site.xidong.domain.feedback.service.FeedbackService;
+import com.site.xidong.domain.feedback.dto.FeedbackReturnDTO;
+import com.site.xidong.domain.feedback.dto.AnswerDTO;
 
 @RestController
 @Log4j2
@@ -17,7 +17,7 @@ public class FeedbackController {
     private final FeedbackService feedbackService;
 
     @PostMapping("/create")
-    public FeedbackReturnDTO createFeedback(AnswerDTO answerDTO) throws Exception {
+    public FeedbackReturnDTO createFeedback(AnswerDTO answerDTO) {
         FeedbackReturnDTO feedbackDTO = null;
         try {
             feedbackDTO = feedbackService.getFeedback(answerDTO);

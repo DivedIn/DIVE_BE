@@ -14,7 +14,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
-import import com.site.xidong.global.jwt.JwtTokenProvider;;
+import com.site.xidong.global.jwt.JwtTokenProvider;
 
 @Slf4j
 @RequiredArgsConstructor

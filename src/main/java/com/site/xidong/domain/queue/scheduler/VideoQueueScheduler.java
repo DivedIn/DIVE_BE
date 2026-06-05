@@ -14,8 +14,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
-import import com.site.xidong.domain.queue.entity.VideoProcessingQueue;;
-import import com.site.xidong.domain.queue.repository.VideoProcessingQueueRepository;;
+import com.site.xidong.domain.queue.entity.VideoProcessingQueue;
+import com.site.xidong.domain.queue.repository.VideoProcessingQueueRepository;
 
 @Component
 @RequiredArgsConstructor

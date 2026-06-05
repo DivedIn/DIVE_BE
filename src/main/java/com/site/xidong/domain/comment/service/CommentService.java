@@ -7,6 +7,11 @@ import com.site.xidong.domain.user.entity.SiteUser;
 import com.site.xidong.domain.user.repository.SiteUserRepository;
 import com.site.xidong.domain.video.entity.Video;
 import com.site.xidong.domain.video.repository.VideoRepository;
+import com.site.xidong.domain.comment.dto.CommentReturnDTO;
+import com.site.xidong.domain.comment.entity.Comment;
+import com.site.xidong.domain.comment.repository.CommentRepository;
+import com.site.xidong.global.exception.CustomException;
+import com.site.xidong.global.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.security.core.Authentication;
@@ -82,7 +87,7 @@ public class CommentService {
         return commentReturnDTOS;
     }
 
-    public CommentReturnDTO update(Long videoId, Long commentId, String contents) throws Exception {
+    public CommentReturnDTO update(Long videoId, Long commentId, String contents) {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         SiteUserSecurityDTO siteUserSecurityDTO = (SiteUserSecurityDTO) auth.getPrincipal();
         SiteUser siteUser = siteUserRepository.findSiteUserByUsername(siteUserSecurityDTO.getUsername()).get();
@@ -90,7 +95,7 @@ public class CommentService {
         Comment updatedComment;
         CommentReturnDTO commentReturnDTO;
         if (!comment.getSiteUser().getUsername().equals(siteUser.getUsername())) {
-            throw new Exception("수정 권한이 없습니다.");
+            throw new CustomException(ErrorCode.FORBIDDEN);
         } else {
             comment.setContents(contents);
             comment.setUpdatedAt(LocalDateTime.now());
@@ -110,13 +115,13 @@ public class CommentService {
         return commentReturnDTO;
     }
 
-    public void delete(Long videoId, Long commentId, String contents) throws Exception {
+    public void delete(Long videoId, Long commentId, String contents) {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         SiteUserSecurityDTO siteUserSecurityDTO = (SiteUserSecurityDTO) auth.getPrincipal();
         SiteUser siteUser = siteUserRepository.findSiteUserByUsername(siteUserSecurityDTO.getUsername()).get();
         Comment comment = commentRepository.findCommentByVideoId(videoId, commentId);
         if (!comment.getSiteUser().getUsername().equals(siteUser.getUsername())) {
-            throw new Exception("삭제 권한이 없습니다.");
+            throw new CustomException(ErrorCode.FORBIDDEN);
         } else {
             commentRepository.delete(comment);
         }
