@@ -1,16 +1,19 @@
 package com.site.xidong.domain.question.dto;
 
+import com.site.xidong.domain.question.entity.Question;
 import lombok.Builder;
-import lombok.Data;
+import lombok.Getter;
 
-@Data
+@Getter
 @Builder
 public class QuestionReturnDTO {
-    private long id;
+    private Long id;
     private String contents;
 
-    public QuestionReturnDTO(long id, String contents) {
-        this.id = id;
-        this.contents = contents;
+    public static QuestionReturnDTO from(Question q) {
+        return QuestionReturnDTO.builder()
+                .id(q.getId())
+                .contents(q.getContents())
+                .build();
     }
 }

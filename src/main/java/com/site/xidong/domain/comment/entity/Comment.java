@@ -2,33 +2,38 @@ package com.site.xidong.domain.comment.entity;
 
 import com.site.xidong.domain.user.entity.SiteUser;
 import com.site.xidong.domain.video.entity.Video;
+import com.site.xidong.global.response.BaseTimeEntity;
 import jakarta.persistence.*;
 import lombok.*;
 
-import java.time.LocalDateTime;
-
 @Entity
 @Getter
-@Setter
-@Builder
-@NoArgsConstructor
-@AllArgsConstructor
-public class Comment {
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
+public class Comment extends BaseTimeEntity {
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "COMMENT_ID")
-    private long id;
+    private Long id;
 
-    @ManyToOne
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "ID")
     private SiteUser siteUser;
 
-    @ManyToOne
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "VIDEO_ID")
     private Video video;
 
     private String contents;
 
-    private LocalDateTime createdAt;
-    private LocalDateTime updatedAt;
+    @Builder
+    public Comment(SiteUser siteUser, Video video, String contents) {
+        this.siteUser = siteUser;
+        this.video = video;
+        this.contents = contents;
+    }
+
+    public void update(String contents) {
+        this.contents = contents;
+    }
 }

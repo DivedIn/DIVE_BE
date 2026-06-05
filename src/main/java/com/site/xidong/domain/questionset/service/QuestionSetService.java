@@ -2,195 +2,92 @@ package com.site.xidong.domain.questionset.service;
 
 import com.site.xidong.domain.question.entity.Question;
 import com.site.xidong.domain.question.repository.QuestionRepository;
-import com.site.xidong.domain.question.dto.QuestionReturnDTO;
-import com.site.xidong.domain.user.dto.SiteUserSecurityDTO;
+import com.site.xidong.domain.questionset.dto.QuestionSetCreateDTO;
+import com.site.xidong.domain.questionset.dto.QuestionSetReturnDTO;
+import com.site.xidong.domain.questionset.dto.QuestionSetUpdateDTO;
+import com.site.xidong.domain.questionset.entity.QuestionSet;
+import com.site.xidong.domain.questionset.exception.QuestionSetNotFoundException;
+import com.site.xidong.domain.questionset.repository.QuestionSetRepository;
 import com.site.xidong.domain.user.entity.SiteUser;
 import com.site.xidong.domain.user.repository.SiteUserRepository;
 import com.site.xidong.global.exception.CustomException;
 import com.site.xidong.global.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.log4j.Log4j2;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDateTime;
-import java.util.ArrayList;
 import java.util.List;
-import java.util.Optional;
-import com.site.xidong.domain.questionset.entity.QuestionSet;
-import com.site.xidong.domain.questionset.repository.QuestionSetRepository;
-import com.site.xidong.domain.questionset.dto.QuestionSetReturnDTO;
-import com.site.xidong.domain.questionset.dto.QuestionSetCreateDTO;
-import com.site.xidong.domain.questionset.dto.QuestionSetUpdateDTO;
-import com.site.xidong.domain.questionset.exception.QuestionSetNotFoundException;
+import java.util.stream.Collectors;
 
-@Log4j2
 @Service
 @RequiredArgsConstructor
+@Transactional(readOnly = true)
 public class QuestionSetService {
+
     private final QuestionSetRepository questionSetRepository;
     private final QuestionRepository questionRepository;
     private final SiteUserRepository siteUserRepository;
 
-    public List<QuestionSetReturnDTO> findAll() { //TODO: question 목록 뜨게 수정
-        List<QuestionSet> questionSets = questionSetRepository.findAllOpenQuestionSetsWithQuestions();
-        List<QuestionSetReturnDTO> questionSetReturnDTOS = new ArrayList<>();
-        for(QuestionSet questionSet : questionSets) {
-            List<QuestionReturnDTO> questionReturnDTOS = new ArrayList<>();
-            for(Question question : questionSet.getQuestions()) {
-                QuestionReturnDTO questionReturnDTO = new QuestionReturnDTO(question.getId(), question.getContents());
-                questionReturnDTOS.add(questionReturnDTO);
-            }
-            QuestionSetReturnDTO questionSetReturnDTO = QuestionSetReturnDTO.builder()
-                    .username(questionSet.getSiteUser().getUsername())
-                    .isOpen(questionSet.isOpen())
-                    .imageUrl(questionSet.getSiteUser().getImageUrl())
-                    .nickname(questionSet.getSiteUser().getNickname())
-                    .refCount(questionSet.getRefCount())
-                    .title(questionSet.getTitle())
-                    .description(questionSet.getDescription())
-                    .id(questionSet.getId())
-                    .category(questionSet.getCategory())
-                    .questions(questionReturnDTOS)
-                    .createdAt(questionSet.getCreatedAt())
-                    .build();
-            questionSetReturnDTOS.add(questionSetReturnDTO);
-        }
-        return questionSetReturnDTOS;
+    public List<QuestionSetReturnDTO> findAll() {
+        return questionSetRepository.findAllOpenQuestionSetsWithQuestions().stream()
+                .map(QuestionSetReturnDTO::from)
+                .collect(Collectors.toList());
     }
 
-    public QuestionSetReturnDTO create(QuestionSetCreateDTO questionSetCreateDTO) {
-        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        SiteUserSecurityDTO siteUserSecurityDTO = (SiteUserSecurityDTO) auth.getPrincipal();
-        SiteUser siteUser = siteUserRepository.findSiteUserByUsername(siteUserSecurityDTO.getUsername()).get();
+    @Transactional
+    public QuestionSetReturnDTO create(String username, QuestionSetCreateDTO dto) {
+        SiteUser siteUser = siteUserRepository.findSiteUserByUsername(username)
+                .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
         QuestionSet questionSet = QuestionSet.builder()
-                .category(questionSetCreateDTO.getCategory())
-                .title(questionSetCreateDTO.getTitle())
-                .description(questionSetCreateDTO.getDescription())
+                .category(dto.getCategory())
+                .title(dto.getTitle())
+                .description(dto.getDescription())
                 .siteUser(siteUser)
-                .isOpen(questionSetCreateDTO.isOpen())
-                .createdAt(LocalDateTime.now())
+                .isOpen(dto.isOpen())
+                .refCount(0)
                 .build();
-        QuestionSet newQuestionSet = questionSetRepository.save(questionSet);
-        QuestionSetReturnDTO questionSetReturnDTO = QuestionSetReturnDTO.builder()
-                .username(siteUser.getUsername())
-                .isOpen(newQuestionSet.isOpen())
-                .imageUrl(siteUser.getImageUrl())
-                .nickname(siteUser.getNickname())
-                .refCount(newQuestionSet.getRefCount())
-                .title(newQuestionSet.getTitle())
-                .description(newQuestionSet.getDescription())
-                .id(newQuestionSet.getId())
-                .category(newQuestionSet.getCategory())
-                .questions(null)
-                .createdAt(newQuestionSet.getCreatedAt())
-                .build();
-        return questionSetReturnDTO;
+        return QuestionSetReturnDTO.from(questionSetRepository.save(questionSet));
     }
 
-    public List<QuestionSetReturnDTO> findMySets() { //TODO: question 목록 뜨게 수정
-        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        SiteUserSecurityDTO siteUserSecurityDTO = (SiteUserSecurityDTO) auth.getPrincipal();
-        SiteUser siteUser = siteUserRepository.findSiteUserByUsername(siteUserSecurityDTO.getUsername()).get();
-        List<QuestionSet> questionSets = questionSetRepository.findMySetsWithQuestions(siteUser.getUsername());
-        List<QuestionSetReturnDTO> questionSetReturnDTOS = new ArrayList<>();
-        for(QuestionSet questionSet : questionSets) {
-            List<QuestionReturnDTO> questionReturnDTOS = new ArrayList<>();
-            for(Question question : questionSet.getQuestions()) {
-                QuestionReturnDTO questionReturnDTO = new QuestionReturnDTO(question.getId(), question.getContents());
-                questionReturnDTOS.add(questionReturnDTO);
-            }
-            QuestionSetReturnDTO questionSetReturnDTO = QuestionSetReturnDTO.builder()
-                    .username(questionSet.getSiteUser().getUsername())
-                    .isOpen(questionSet.isOpen())
-                    .imageUrl(questionSet.getSiteUser().getImageUrl())
-                    .nickname(questionSet.getSiteUser().getNickname())
-                    .refCount(questionSet.getRefCount())
-                    .title(questionSet.getTitle())
-                    .description(questionSet.getDescription())
-                    .id(questionSet.getId())
-                    .questions(questionReturnDTOS)
-                    .category(questionSet.getCategory())
-                    .createdAt(questionSet.getCreatedAt())
-                    .build();
-            questionSetReturnDTOS.add(questionSetReturnDTO);
+    public List<QuestionSetReturnDTO> findMySets(String username) {
+        return questionSetRepository.findMySetsWithQuestions(username).stream()
+                .map(QuestionSetReturnDTO::from)
+                .collect(Collectors.toList());
+    }
+
+    @Transactional
+    public QuestionSetReturnDTO updateQuestionSet(Long setId, String username, QuestionSetUpdateDTO dto) {
+        SiteUser siteUser = siteUserRepository.findSiteUserByUsername(username)
+                .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
+        QuestionSet questionSet = questionSetRepository.findById(setId)
+                .orElseThrow(QuestionSetNotFoundException::new);
+        if (!questionSet.getSiteUser().getUsername().equals(siteUser.getUsername())) {
+            throw new CustomException(ErrorCode.FORBIDDEN);
         }
-        return questionSetReturnDTOS;
+        questionSet.update(dto.getTitle(), dto.getDescription(), dto.getCategory(), dto.getIsOpen());
+        return QuestionSetReturnDTO.from(questionSet);
     }
 
-    public QuestionSetReturnDTO updateQuestionSet(Long setId, QuestionSetUpdateDTO questionSetUpdateDTO) {
-        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        SiteUserSecurityDTO siteUserSecurityDTO = (SiteUserSecurityDTO) auth.getPrincipal();
-        SiteUser siteUser = siteUserRepository.findSiteUserByUsername(siteUserSecurityDTO.getUsername()).get();
-        Optional<QuestionSet> questionSet = questionSetRepository.findById(setId);
-        QuestionSet target;
-        QuestionSet updatedSet;
-        QuestionSetReturnDTO questionSetReturnDTO;
-        if(questionSet.isPresent()) {
-            target = questionSet.get();
-            if(!target.getSiteUser().getUsername().equals(siteUser.getUsername())) {
-                throw new CustomException(ErrorCode.FORBIDDEN);
-            } else {
-                target.setTitle(questionSetUpdateDTO.getTitle());
-                target.setDescription(questionSetUpdateDTO.getDescription());
-                target.setCategory(questionSetUpdateDTO.getCategory());
-                target.setOpen(questionSetUpdateDTO.getIsOpen());
-                updatedSet = questionSetRepository.save(target);
-                questionSetReturnDTO = setDTO(updatedSet);
-                return questionSetReturnDTO;
-            }
-        } else {
-            throw new QuestionSetNotFoundException();
+    @Transactional
+    public void delete(Long setId, String username) {
+        SiteUser siteUser = siteUserRepository.findSiteUserByUsername(username)
+                .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
+        QuestionSet questionSet = questionSetRepository.findById(setId)
+                .orElseThrow(QuestionSetNotFoundException::new);
+        if (!siteUser.getUsername().equals(questionSet.getSiteUser().getUsername())) {
+            throw new CustomException(ErrorCode.FORBIDDEN);
         }
+        questionSetRepository.delete(questionSet);
     }
 
-    public QuestionSetReturnDTO setDTO(QuestionSet questionSet) {
-        QuestionSetReturnDTO questionSetReturnDTO;
-        List<QuestionReturnDTO> questionReturnDTOS = new ArrayList<>();
-        for(Question question : questionSet.getQuestions()) {
-            QuestionReturnDTO questionReturnDTO = new QuestionReturnDTO(question.getId(), question.getContents());
-            questionReturnDTOS.add(questionReturnDTO);
-        }
-        questionSetReturnDTO = QuestionSetReturnDTO.builder()
-                .id(questionSet.getId())
-                .username(questionSet.getSiteUser().getUsername())
-                .nickname(questionSet.getSiteUser().getNickname())
-                .imageUrl(questionSet.getSiteUser().getImageUrl())
-                .title(questionSet.getTitle())
-                .description(questionSet.getDescription())
-                .category(questionSet.getCategory())
-                .isOpen(questionSet.isOpen())
-                .questions(questionReturnDTOS)
-                .refCount(questionSet.getRefCount())
-                .createdAt(questionSet.getCreatedAt())
-                .build();
-        return questionSetReturnDTO;
-    }
+    @Transactional
+    public QuestionSetReturnDTO bringNew(Long fromId, String username, List<Long> questionIds) {
+        SiteUser siteUser = siteUserRepository.findSiteUserByUsername(username)
+                .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
+        QuestionSet fromSet = questionSetRepository.findById(fromId)
+                .orElseThrow(QuestionSetNotFoundException::new);
 
-    public void delete(Long setId) {
-        Optional<QuestionSet> selectedSet = questionSetRepository.findById(setId);
-        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        SiteUserSecurityDTO siteUserSecurityDTO = (SiteUserSecurityDTO) auth.getPrincipal();
-        SiteUser siteUser = siteUserRepository.findSiteUserByUsername(siteUserSecurityDTO.getUsername()).get();
-        if(selectedSet.isPresent()) {
-            QuestionSet questionSet = selectedSet.get();
-            if(!siteUser.getUsername().equals(questionSet.getSiteUser().getUsername())) {
-                throw new CustomException(ErrorCode.FORBIDDEN);
-            } else {
-                questionSetRepository.delete(questionSet);
-            }
-        } else {
-            throw new QuestionSetNotFoundException();
-        }
-    }
-
-    public QuestionSetReturnDTO bringNew(Long fromId, List<Long> questionIds) {
-        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        SiteUserSecurityDTO siteUserSecurityDTO = (SiteUserSecurityDTO) auth.getPrincipal();
-        SiteUser siteUser = siteUserRepository.findSiteUserByUsername(siteUserSecurityDTO.getUsername()).get();
-        QuestionSet fromSet = questionSetRepository.findById(fromId).get();
-        QuestionSet questionSet = QuestionSet.builder()
+        QuestionSet newSet = QuestionSet.builder()
                 .category(fromSet.getCategory())
                 .title(fromSet.getTitle() + " 복사본")
                 .description(fromSet.getDescription())
@@ -198,41 +95,33 @@ public class QuestionSetService {
                 .isOpen(true)
                 .refCount(0)
                 .build();
-        List<Question> questions = new ArrayList<>();
-        for(Long id : questionIds) {
-            Question question = Question.builder()
-                            .questionSet(questionSet)
-                            .contents(questionRepository.findByQuestionSetIdAndId(fromId, id).get().getContents())
-                            .build();
-            questions.add(question);
-        }
-        questionSet.setQuestions(questions);
 
-        QuestionSet newSet = questionSetRepository.save(questionSet);
-        QuestionSetReturnDTO questionSetReturnDTO = setDTO(newSet);
-        fromSet.setRefCount(fromSet.getRefCount() + 1);
-        questionSetRepository.save(fromSet);
-        return questionSetReturnDTO;
+        List<Question> questions = questionIds.stream()
+                .map(id -> questionRepository.findByQuestionSetIdAndId(fromId, id)
+                        .orElseThrow(QuestionSetNotFoundException::new))
+                .map(q -> Question.builder().questionSet(newSet).contents(q.getContents()).build())
+                .collect(Collectors.toList());
+        newSet.addQuestions(questions);
+        fromSet.incrementRefCount(1);
+        return QuestionSetReturnDTO.from(questionSetRepository.save(newSet));
     }
 
-    public void bringN(Long fromId, List<Long> questionIds, List<Long> toIds) {
-        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        SiteUserSecurityDTO siteUserSecurityDTO = (SiteUserSecurityDTO) auth.getPrincipal();
-        SiteUser siteUser = siteUserRepository.findSiteUserByUsername(siteUserSecurityDTO.getUsername()).get();
-        QuestionSet fromSet = questionSetRepository.findById(fromId).get();
-        for(Long setId : toIds) {
-            QuestionSet toSet = questionSetRepository.findByIdWithQuestions(setId).get();
-            List<Question> questions = toSet.getQuestions();
-            for(Long questionId : questionIds) {
-                Question newQuestion = Question.builder()
-                        .questionSet(toSet)
-                        .contents(questionRepository.findByQuestionSetIdAndId(fromId, questionId).get().getContents())
-                        .build();
-                questions.add(newQuestion);
-            }
-            questionSetRepository.save(toSet);
+    @Transactional
+    public void bringN(Long fromId, String username, List<Long> questionIds, List<Long> toIds) {
+        siteUserRepository.findSiteUserByUsername(username)
+                .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
+        QuestionSet fromSet = questionSetRepository.findById(fromId)
+                .orElseThrow(QuestionSetNotFoundException::new);
+        for (Long setId : toIds) {
+            QuestionSet toSet = questionSetRepository.findByIdWithQuestions(setId)
+                    .orElseThrow(QuestionSetNotFoundException::new);
+            List<Question> newQuestions = questionIds.stream()
+                    .map(qId -> questionRepository.findByQuestionSetIdAndId(fromId, qId)
+                            .orElseThrow(QuestionSetNotFoundException::new))
+                    .map(q -> Question.builder().questionSet(toSet).contents(q.getContents()).build())
+                    .collect(Collectors.toList());
+            toSet.addQuestions(newQuestions);
         }
-        fromSet.setRefCount(fromSet.getRefCount() + toIds.size());
-        questionSetRepository.save(fromSet);
+        fromSet.incrementRefCount(toIds.size());
     }
 }

@@ -1,20 +1,18 @@
 package com.site.xidong.domain.user.controller;
 
-import com.site.xidong.domain.user.entity.SiteUser;
-import com.site.xidong.domain.user.service.SiteUserService;
-import jakarta.servlet.http.HttpServletResponse;
-import lombok.Data;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.apache.coyote.Response;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
-import org.springframework.security.oauth2.core.OAuth2AuthenticationException;
-import org.springframework.web.bind.annotation.*;
-import com.site.xidong.domain.user.service.AuthService;
 import com.site.xidong.domain.user.dto.KakaoDTO;
 import com.site.xidong.domain.user.dto.NaverDTO;
 import com.site.xidong.domain.user.dto.Token;
+import com.site.xidong.domain.user.service.AuthService;
+import com.site.xidong.domain.user.service.SiteUserService;
+import com.site.xidong.global.response.ApiResponse;
+import lombok.Data;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.web.bind.annotation.*;
 
 @RequiredArgsConstructor
 @RestController
@@ -38,40 +36,35 @@ public class AuthController {
     }
 
     @PostMapping("/auth/{provider}/callback")
-    public ResponseEntity<SocialLoginResponse> callback(@PathVariable String provider, @RequestBody CallbackRequest request) {
+    public ResponseEntity<ApiResponse<SocialLoginResponse>> callback(
+            @PathVariable String provider,
+            @RequestBody CallbackRequest request) {
         log.info("callback request: {}", request);
-        try {
-            SocialLoginResponse response = new SocialLoginResponse();
-            if (provider.equalsIgnoreCase("kakao")) {
-                KakaoDTO.OAuthToken kakaoToken = authService.oAuthLogin(request.getCode());
-                response.setAccessToken(kakaoToken.getAccess_token());
-                response.setRefreshToken(kakaoToken.getRefresh_token());
-                response.setKey(kakaoToken.getAccess_token());
-            } else if (provider.equalsIgnoreCase("naver")) {
-                NaverDTO.OAuthToken naverToken = authService.naverLogin(request.getCode(), request.getState());
-                response.setAccessToken(naverToken.getAccess_token());
-                response.setRefreshToken(naverToken.getRefresh_token());
-                response.setKey(naverToken.getAccess_token());
-            } else {
-                return ResponseEntity.badRequest().build();
-            }
-            return ResponseEntity.ok(response);
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        SocialLoginResponse response = new SocialLoginResponse();
+        if (provider.equalsIgnoreCase("kakao")) {
+            KakaoDTO.OAuthToken kakaoToken = authService.oAuthLogin(request.getCode());
+            response.setAccessToken(kakaoToken.getAccess_token());
+            response.setRefreshToken(kakaoToken.getRefresh_token());
+            response.setKey(kakaoToken.getAccess_token());
+        } else if (provider.equalsIgnoreCase("naver")) {
+            NaverDTO.OAuthToken naverToken = authService.naverLogin(request.getCode(), request.getState());
+            response.setAccessToken(naverToken.getAccess_token());
+            response.setRefreshToken(naverToken.getRefresh_token());
+            response.setKey(naverToken.getAccess_token());
+        } else {
+            return ResponseEntity.badRequest().build();
         }
+        return ResponseEntity.ok(ApiResponse.success(response));
     }
 
-    @PostMapping("/auth/refresh")  // URL 경로 변경
-    public ResponseEntity<Token> refresh() {
-        Token jwtToken = siteUserService.refresh();
-        return ResponseEntity.ok(jwtToken);
+    @PostMapping("/auth/refresh")
+    public ResponseEntity<ApiResponse<Token>> refresh(@AuthenticationPrincipal UserDetails ud) {
+        return ResponseEntity.ok(ApiResponse.success(siteUserService.refresh(ud.getUsername())));
     }
 
-    @GetMapping("/auth/logout")  // 이미 있는 경로라면 유지
-    public ResponseEntity<?> logout() {
-        siteUserService.logout();
-        return ResponseEntity.ok().build();
+    @GetMapping("/auth/logout")
+    public ResponseEntity<Void> logout(@AuthenticationPrincipal UserDetails ud) {
+        siteUserService.logout(ud.getUsername());
+        return ResponseEntity.noContent().build();
     }
-
-
 }

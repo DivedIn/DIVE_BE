@@ -1,12 +1,11 @@
 package com.site.xidong.domain.user.entity;
 
+import com.site.xidong.global.response.BaseTimeEntity;
 import jakarta.persistence.*;
-import jakarta.validation.constraints.Email;
 import lombok.*;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
-import org.springframework.security.oauth2.core.user.OAuth2User;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -16,18 +15,15 @@ import java.util.stream.Collectors;
 
 @Entity
 @Getter
-@Setter
-@Builder
-@NoArgsConstructor
-@AllArgsConstructor
-public class SiteUser implements UserDetails {
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
+public class SiteUser extends BaseTimeEntity implements UserDetails {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private long id;
 
     @Column(nullable = false, length = 100, unique = true)
-    private String username; // id
+    private String username;
 
     @Column(nullable = false, length = 100)
     private String email;
@@ -41,24 +37,43 @@ public class SiteUser implements UserDetails {
     private String imageUrl;
 
     @ElementCollection(fetch = FetchType.EAGER)
-    @Builder.Default
-    private List<String> roles = new ArrayList<>(); // 원래 값타입은 지연로딩을 권장하지만 인가 확인이 안되는 문제가 있어서 EAGER로 바꿈
+    private List<String> roles = new ArrayList<>();
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private LoginMethod loginMethod;
-
-    @Column(nullable = false)
-    private LocalDateTime createdAt;
-
-    @Column
-    private LocalDateTime updatedAt;
 
     private String refreshToken;
 
     private long tokenValidTime;
 
     private LocalDateTime tokenIssueAt;
+
+    @Builder
+    public SiteUser(String username, String email, String password, String nickname, String imageUrl, LoginMethod loginMethod) {
+        this.username = username;
+        this.email = email;
+        this.password = password;
+        this.nickname = nickname;
+        this.imageUrl = imageUrl;
+        this.loginMethod = loginMethod;
+    }
+
+    public void addRole(String role) {
+        this.roles.add(role);
+    }
+
+    public void updateToken(String refreshToken, long tokenValidTime) {
+        this.refreshToken = refreshToken;
+        this.tokenIssueAt = LocalDateTime.now();
+        this.tokenValidTime = tokenValidTime;
+    }
+
+    public void clearToken() {
+        this.refreshToken = null;
+        this.tokenIssueAt = null;
+        this.tokenValidTime = 0L;
+    }
 
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
@@ -68,26 +83,14 @@ public class SiteUser implements UserDetails {
     }
 
     @Override
-    public boolean isAccountNonExpired() {
-        return true;
-    }
+    public boolean isAccountNonExpired() { return true; }
 
     @Override
-    public boolean isAccountNonLocked() {
-        return true;
-    }
+    public boolean isAccountNonLocked() { return true; }
 
     @Override
-    public boolean isCredentialsNonExpired() {
-        return true;
-    }
+    public boolean isCredentialsNonExpired() { return true; }
 
     @Override
-    public boolean isEnabled() {
-        return true;
-    }
-
-    public void addRole(String role) {
-        this.roles.add(role);
-    }
+    public boolean isEnabled() { return true; }
 }
