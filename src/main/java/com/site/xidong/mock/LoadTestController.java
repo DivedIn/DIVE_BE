@@ -1,8 +1,8 @@
 package com.site.xidong.mock;
 
-import com.site.xidong.queue.VideoProcessingQueue;
-import com.site.xidong.queue.VideoProcessingQueueRepository;
-import com.site.xidong.video.VideoService;
+import com.site.xidong.domain.queue.entity.VideoProcessingQueue;
+import com.site.xidong.domain.queue.repository.VideoProcessingQueueRepository;
+import com.site.xidong.domain.video.service.VideoService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
