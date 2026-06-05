@@ -1,16 +1,18 @@
 package com.site.xidong.domain.user.controller;
 
+import com.site.xidong.domain.user.dto.SiteUserDTO;
 import com.site.xidong.domain.user.dto.SiteUserJoinDTO;
 import com.site.xidong.domain.user.dto.SiteUserLoginDTO;
 import com.site.xidong.domain.user.dto.Token;
+import com.site.xidong.domain.user.service.SiteUserService;
+import com.site.xidong.global.response.ApiResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.userdetails.UsernameNotFoundException;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
-import com.site.xidong.domain.user.service.SiteUserService;
-import com.site.xidong.domain.user.dto.SiteUserDTO;
 
 @RequiredArgsConstructor
 @RestController
@@ -20,32 +22,18 @@ public class SiteUserController {
     private final SiteUserService siteUserService;
 
     @PostMapping("/signup")
-    public ResponseEntity<Token> join(@RequestBody SiteUserJoinDTO siteUserJoinDTO) {
-        Token jwtToken;
-        try {
-            jwtToken = siteUserService.join(siteUserJoinDTO);
-        } catch(Exception e) {
-            return new ResponseEntity<>(HttpStatus.CONFLICT);
-        }
-        return ResponseEntity.status(HttpStatus.OK).body(jwtToken);
+    public ResponseEntity<ApiResponse<Token>> join(@RequestBody SiteUserJoinDTO siteUserJoinDTO) {
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse.success(siteUserService.join(siteUserJoinDTO)));
     }
 
     @PostMapping("/login")
-    public ResponseEntity<Token> login(@RequestBody SiteUserLoginDTO siteUserLoginDTO) throws UsernameNotFoundException, Exception {
-        Token jwtToken;
-        try {
-            jwtToken = siteUserService.login(siteUserLoginDTO);
-        } catch(UsernameNotFoundException e1) {
-            return new ResponseEntity<>(HttpStatus.UNAUTHORIZED);
-        } catch(Exception e2) {
-            return new ResponseEntity<>(HttpStatus.UNAUTHORIZED);
-        }
-        return ResponseEntity.status(HttpStatus.OK).body(jwtToken);
+    public ResponseEntity<ApiResponse<Token>> login(@RequestBody SiteUserLoginDTO siteUserLoginDTO) {
+        return ResponseEntity.ok(ApiResponse.success(siteUserService.login(siteUserLoginDTO)));
     }
 
     @GetMapping("/myInfo")
-    public ResponseEntity<SiteUserDTO> getMyInfo() {
-        return ResponseEntity.status(HttpStatus.OK).body(siteUserService.getMyInfo());
+    public ResponseEntity<ApiResponse<SiteUserDTO>> getMyInfo(@AuthenticationPrincipal UserDetails ud) {
+        return ResponseEntity.ok(ApiResponse.success(siteUserService.getMyInfo(ud.getUsername())));
     }
-
 }

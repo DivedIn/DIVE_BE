@@ -19,15 +19,14 @@ import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
-import java.time.LocalDateTime;
-import com.site.xidong.domain.feedback.entity.Feedback;
 import com.site.xidong.domain.feedback.dto.AnswerDTO;
 import com.site.xidong.domain.feedback.dto.FeedbackReturnDTO;
-
+import com.site.xidong.domain.feedback.entity.Feedback;
 
 @Log4j2
 @Service
 @RequiredArgsConstructor
+@org.springframework.transaction.annotation.Transactional(readOnly = true)
 public class FeedbackService {
     @Value("${claude.api.key}")
     private String API_KEY;
@@ -39,6 +38,7 @@ public class FeedbackService {
     private final FeedbackRepository feedbackRepository;
 
     @SneakyThrows
+    @org.springframework.transaction.annotation.Transactional
     public FeedbackReturnDTO getFeedback(AnswerDTO answerDTO) { //TODO: WebClient으로 변경하기
 
         if (mockEnabled) {
@@ -102,21 +102,11 @@ public class FeedbackService {
             ObjectNode responseNode = mapper.readValue(responseString, ObjectNode.class);
             String content = responseNode.path("content").path(0).path("text").asText();
 
-            Feedback feedback = Feedback.builder()
+            Feedback feedback = feedbackRepository.save(Feedback.builder()
                     .contents(content)
-                    .createdAt(LocalDateTime.now())
                     .video(video)
-                    .build();
-            feedbackRepository.save(feedback);
-
-            FeedbackReturnDTO feedbackDTO = FeedbackReturnDTO.builder()
-                    .feedbackId(feedback.getId())
-                    .videoId(feedback.getVideo().getId())
-                    .contents(feedback.getContents())
-                    .createdAt(feedback.getCreatedAt())
-                    .build();
-
-            return feedbackDTO;
+                    .build());
+            return FeedbackReturnDTO.from(feedback);
         } catch (IOException e) {
             // 에러 응답 처리
             if (connection.getResponseCode() >= 400) {
@@ -173,19 +163,11 @@ public class FeedbackService {
         Thread.sleep(20000);  // 실제 Claude API 호출 시간 시뮬레이션
 
         // DB 저장 (실제와 동일)
-        Feedback feedback = Feedback.builder()
+        Feedback feedback = feedbackRepository.save(Feedback.builder()
                 .contents(mockContent)
-                .createdAt(LocalDateTime.now())
                 .video(video)
-                .build();
-        feedbackRepository.save(feedback);
-
-        return FeedbackReturnDTO.builder()
-                .feedbackId(feedback.getId())
-                .videoId(video.getId())
-                .contents(feedback.getContents())
-                .createdAt(feedback.getCreatedAt())
-                .build();
+                .build());
+        return FeedbackReturnDTO.from(feedback);
     }
 
     public Feedback findFeedback(Long feedbackId) {

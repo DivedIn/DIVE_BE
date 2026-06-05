@@ -1,129 +1,85 @@
 package com.site.xidong.domain.comment.service;
 
+import com.site.xidong.domain.comment.dto.CommentReturnDTO;
+import com.site.xidong.domain.comment.entity.Comment;
+import com.site.xidong.domain.comment.repository.CommentRepository;
 import com.site.xidong.domain.notification.dto.CommentNotificationDTO;
 import com.site.xidong.domain.notification.service.NotificationService;
-import com.site.xidong.domain.user.dto.SiteUserSecurityDTO;
 import com.site.xidong.domain.user.entity.SiteUser;
 import com.site.xidong.domain.user.repository.SiteUserRepository;
 import com.site.xidong.domain.video.entity.Video;
 import com.site.xidong.domain.video.repository.VideoRepository;
-import com.site.xidong.domain.comment.dto.CommentReturnDTO;
-import com.site.xidong.domain.comment.entity.Comment;
-import com.site.xidong.domain.comment.repository.CommentRepository;
 import com.site.xidong.global.exception.CustomException;
 import com.site.xidong.global.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.log4j.Log4j2;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
-import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.List;
+import org.springframework.transaction.annotation.Transactional;
 
-@Log4j2
+import java.util.List;
+import java.util.stream.Collectors;
+
 @Service
 @RequiredArgsConstructor
+@Transactional(readOnly = true)
 public class CommentService {
+
     private final CommentRepository commentRepository;
     private final SiteUserRepository siteUserRepository;
     private final VideoRepository videoRepository;
     private final NotificationService notificationService;
 
-    public CommentReturnDTO create(Long videoId, String contents) {
-        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        SiteUserSecurityDTO siteUserSecurityDTO = (SiteUserSecurityDTO) auth.getPrincipal();
-        SiteUser siteUser = siteUserRepository.findSiteUserByUsername(siteUserSecurityDTO.getUsername()).get();
-        Video video = videoRepository.findById(videoId).get();
+    @Transactional
+    public CommentReturnDTO create(Long videoId, String username, String contents) {
+        SiteUser siteUser = siteUserRepository.findSiteUserByUsername(username)
+                .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
+        Video video = videoRepository.findById(videoId)
+                .orElseThrow(() -> new CustomException(ErrorCode.VIDEO_NOT_FOUND));
+
         Comment comment = Comment.builder()
                 .siteUser(siteUser)
                 .video(video)
                 .contents(contents)
-                .createdAt(LocalDateTime.now())
                 .build();
-        Comment newComment = commentRepository.save(comment);
+        Comment saved = commentRepository.save(comment);
 
-        // 알림 보내기
-        CommentNotificationDTO commentNotificationDTO = CommentNotificationDTO.builder()
+        notificationService.send(video.getSiteUser().getUsername(), "new-comment",
+                CommentNotificationDTO.builder()
                         .videoId(video.getId())
-                        .message("새로운 댓글이 달렸습니다: " + newComment.getContents())
-                        .commentId(newComment.getId())
-                        .build();
+                        .message("새로운 댓글이 달렸습니다: " + saved.getContents())
+                        .commentId(saved.getId())
+                        .build());
 
-        notificationService.send(video.getSiteUser().getUsername(), "new-comment", commentNotificationDTO);
-
-        CommentReturnDTO commentReturnDTO = CommentReturnDTO.builder()
-                .commentId(newComment.getId())
-                .imageUrl(newComment.getSiteUser().getImageUrl())
-                .username(newComment.getSiteUser().getUsername())
-                .nickname(newComment.getSiteUser().getNickname())
-                .videoPath(newComment.getVideo().getVideoPath())
-                .videoName(newComment.getVideo().getVideoName())
-                .createdAt(newComment.getCreatedAt())
-                .updatedAt(null)
-                .contents(newComment.getContents())
-                .build();
-        return commentReturnDTO;
+        return CommentReturnDTO.from(saved);
     }
 
     public List<CommentReturnDTO> findAllComment(Long videoId) {
-        Video video = videoRepository.findById(videoId).get();
-        List<Comment> comments = video.getCommentList();
-        List<CommentReturnDTO> commentReturnDTOS = new ArrayList<>();
-        for (Comment comment : comments) {
-            CommentReturnDTO commentReturnDTO = CommentReturnDTO.builder()
-                    .commentId(comment.getId())
-                    .imageUrl(comment.getSiteUser().getImageUrl())
-                    .username(comment.getSiteUser().getUsername())
-                    .nickname(comment.getSiteUser().getNickname())
-                    .videoPath(comment.getVideo().getVideoPath())
-                    .videoName(comment.getVideo().getVideoName())
-                    .createdAt(comment.getCreatedAt())
-                    .updatedAt(comment.getUpdatedAt())
-                    .contents(comment.getContents())
-                    .build();
-            commentReturnDTOS.add(commentReturnDTO);
-        }
-        return commentReturnDTOS;
+        Video video = videoRepository.findById(videoId)
+                .orElseThrow(() -> new CustomException(ErrorCode.VIDEO_NOT_FOUND));
+        return video.getCommentList().stream()
+                .map(CommentReturnDTO::from)
+                .collect(Collectors.toList());
     }
 
-    public CommentReturnDTO update(Long videoId, Long commentId, String contents) {
-        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        SiteUserSecurityDTO siteUserSecurityDTO = (SiteUserSecurityDTO) auth.getPrincipal();
-        SiteUser siteUser = siteUserRepository.findSiteUserByUsername(siteUserSecurityDTO.getUsername()).get();
-        Comment comment = commentRepository.findCommentByVideoId(videoId, commentId);
-        Comment updatedComment;
-        CommentReturnDTO commentReturnDTO;
-        if (!comment.getSiteUser().getUsername().equals(siteUser.getUsername())) {
-            throw new CustomException(ErrorCode.FORBIDDEN);
-        } else {
-            comment.setContents(contents);
-            comment.setUpdatedAt(LocalDateTime.now());
-            updatedComment = commentRepository.save(comment);
-            commentReturnDTO = CommentReturnDTO.builder()
-                    .commentId(updatedComment.getId())
-                    .imageUrl(updatedComment.getSiteUser().getImageUrl())
-                    .username(updatedComment.getSiteUser().getUsername())
-                    .nickname(updatedComment.getSiteUser().getNickname())
-                    .videoPath(updatedComment.getVideo().getVideoPath())
-                    .videoName(updatedComment.getVideo().getVideoName())
-                    .createdAt(updatedComment.getCreatedAt())
-                    .updatedAt(updatedComment.getUpdatedAt())
-                    .contents(updatedComment.getContents())
-                    .build();
-        }
-        return commentReturnDTO;
-    }
-
-    public void delete(Long videoId, Long commentId, String contents) {
-        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        SiteUserSecurityDTO siteUserSecurityDTO = (SiteUserSecurityDTO) auth.getPrincipal();
-        SiteUser siteUser = siteUserRepository.findSiteUserByUsername(siteUserSecurityDTO.getUsername()).get();
+    @Transactional
+    public CommentReturnDTO update(Long videoId, Long commentId, String username, String contents) {
+        SiteUser siteUser = siteUserRepository.findSiteUserByUsername(username)
+                .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
         Comment comment = commentRepository.findCommentByVideoId(videoId, commentId);
         if (!comment.getSiteUser().getUsername().equals(siteUser.getUsername())) {
             throw new CustomException(ErrorCode.FORBIDDEN);
-        } else {
-            commentRepository.delete(comment);
         }
+        comment.update(contents);
+        return CommentReturnDTO.from(comment);
+    }
+
+    @Transactional
+    public void delete(Long videoId, Long commentId, String username) {
+        SiteUser siteUser = siteUserRepository.findSiteUserByUsername(username)
+                .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
+        Comment comment = commentRepository.findCommentByVideoId(videoId, commentId);
+        if (!comment.getSiteUser().getUsername().equals(siteUser.getUsername())) {
+            throw new CustomException(ErrorCode.FORBIDDEN);
+        }
+        commentRepository.delete(comment);
     }
 }

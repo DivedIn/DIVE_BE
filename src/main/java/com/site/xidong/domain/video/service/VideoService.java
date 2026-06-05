@@ -3,7 +3,6 @@ package com.site.xidong.domain.video.service;
 import com.site.xidong.domain.feedback.entity.Feedback;
 import com.site.xidong.domain.feedback.dto.AnswerDTO;
 import com.site.xidong.domain.feedback.dto.FeedbackReturnDTO;
-import com.site.xidong.domain.feedback.repository.FeedbackRepository;
 import com.site.xidong.domain.feedback.service.FeedbackService;
 import com.site.xidong.domain.feedback.service.LocalWhisperService;
 import com.site.xidong.domain.notification.service.NotificationService;
@@ -13,7 +12,6 @@ import com.site.xidong.domain.question.exception.QuestionNotFoundException;
 import com.site.xidong.domain.question.repository.QuestionRepository;
 import com.site.xidong.domain.queue.entity.VideoProcessingQueue;
 import com.site.xidong.domain.queue.repository.VideoProcessingQueueRepository;
-import com.site.xidong.domain.user.dto.SiteUserSecurityDTO;
 import com.site.xidong.domain.user.entity.SiteUser;
 import com.site.xidong.domain.user.repository.SiteUserRepository;
 import com.site.xidong.global.exception.CustomException;
@@ -33,8 +31,6 @@ import org.springframework.boot.web.servlet.context.ServletWebServerApplicationC
 import org.springframework.context.annotation.Lazy;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -55,12 +51,9 @@ import javax.imageio.stream.FileImageOutputStream;
 import java.awt.*;
 import java.awt.image.BufferedImage;
 import java.io.*;
-import java.lang.management.ManagementFactory;
-import java.lang.management.ThreadMXBean;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
-import java.time.LocalDateTime;
 import java.util.*;
 import java.util.List;
 import java.util.concurrent.*;
@@ -72,7 +65,7 @@ import com.site.xidong.domain.video.dto.VideoWithFeedbackDTO;
 
 @Slf4j
 @Service
-@Transactional
+@Transactional(readOnly = true)
 @RequiredArgsConstructor
 public class VideoService {
 
@@ -128,7 +121,6 @@ public class VideoService {
                     .videoName(videoKey)
                     .siteUser(user)
                     .question(question)
-                    .createdAt(LocalDateTime.now())
                     .isOpen(isOpen)
                     .processingStatus("PROCESSING")
                     .build();
@@ -247,8 +239,8 @@ public class VideoService {
     public void updateVideoThumbnailAndStatus(Long videoId, String thumbnailUrl) {
         Video video = videoRepository.findById(videoId)
                 .orElseThrow(() -> new RuntimeException("Video not found with id: " + videoId));
-        video.setThumbnail(thumbnailUrl);
-        video.setProcessingStatus("TRANSCRIBING");
+        video.updateThumbnail(thumbnailUrl);
+        video.updateStatus("TRANSCRIBING");
         videoRepository.save(video);
     }
 
@@ -257,7 +249,7 @@ public class VideoService {
         log.warn("비디오 ID: {} 유효한 답변이 없습니다. 원본 답변: '{}'", videoId, answer);
         Video video = videoRepository.findById(videoId).orElse(null);
         if (video != null) {
-            video.setProcessingStatus("NO_RESPONSE");
+            video.updateStatus("NO_RESPONSE");
             videoRepository.save(video);
             VideoNotificationDTO noResponseData = VideoNotificationDTO.builder()
                     .videoId(videoId)
@@ -279,8 +271,8 @@ public class VideoService {
                 .build();
         FeedbackReturnDTO feedbackReturnDTO = feedbackService.getFeedback(answerDTO);
         Feedback feedback = feedbackService.findFeedback(feedbackReturnDTO.getFeedbackId());
-        video.setProcessingStatus("COMPLETED");
-        video.setFeedback(feedback);
+        video.updateStatus("COMPLETED");
+        video.linkFeedback(feedback);
         videoRepository.save(video);
 
         VideoNotificationDTO notification = VideoNotificationDTO.builder()
@@ -300,7 +292,7 @@ public class VideoService {
     public void handleError(Long videoId, String username) {
         Video video = videoRepository.findById(videoId).orElse(null);
         if (video != null) {
-            video.setProcessingStatus("ERROR");
+            video.updateStatus("ERROR");
             videoRepository.save(video);
             VideoNotificationDTO errorData = VideoNotificationDTO.builder()
                     .videoId(videoId)
@@ -852,128 +844,49 @@ public class VideoService {
         return returnVideoWithFeedback(video);
     }
 
-    @SneakyThrows
     public List<VideoReturnDTO> getOpenVideos() {
-        List<Video> videos = videoRepository.findAllOpenVideos();
-        return videos.stream()
-                .map(this::convertToDTO)
+        return videoRepository.findAllOpenVideos().stream()
+                .map(VideoReturnDTO::from)
                 .toList();
     }
 
-    @SneakyThrows
-    public List<VideoReturnDTO> getMyVideos() {
-        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        SiteUserSecurityDTO siteUserSecurityDTO = (SiteUserSecurityDTO) auth.getPrincipal();
-        String username = siteUserSecurityDTO.getUsername();
-
-        List<Video> videos = videoRepository.findMyVideos(username);
-        return videos.stream()
-                .map(this::convertToDTO)
+    public List<VideoReturnDTO> getMyVideos(String username) {
+        return videoRepository.findMyVideos(username).stream()
+                .map(VideoReturnDTO::from)
                 .toList();
     }
 
-    public VideoReturnDTO changeVisibility(Long videoId, Boolean isOpen) {
-        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        SiteUserSecurityDTO siteUserSecurityDTO = (SiteUserSecurityDTO) auth.getPrincipal();
-        SiteUser siteUser = siteUserRepository.findSiteUserByUsername(siteUserSecurityDTO.getUsername())
-                .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
-
+    @Transactional
+    public VideoReturnDTO changeVisibility(Long videoId, String username, Boolean isOpen) {
         Video video = videoRepository.findById(videoId)
                 .orElseThrow(() -> new CustomException(ErrorCode.VIDEO_NOT_FOUND));
-
-        if (!video.getSiteUser().getUsername().equals(siteUser.getUsername())) {
+        if (!video.getSiteUser().getUsername().equals(username)) {
             throw new CustomException(ErrorCode.FORBIDDEN);
         }
-        video.setOpen(isOpen);
-        video.setUpdatedAt(LocalDateTime.now());
-
-        Video updatedVideo = videoRepository.save(video);
-        return convertToDTO(updatedVideo);
+        video.updateVisibility(isOpen);
+        return VideoReturnDTO.from(videoRepository.save(video));
     }
 
-    public void deleteVideo(Long videoId) {
-        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        SiteUserSecurityDTO siteUserSecurityDTO = (SiteUserSecurityDTO) auth.getPrincipal();
-        SiteUser siteUser = siteUserRepository.findSiteUserByUsername(siteUserSecurityDTO.getUsername())
-                .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
-
+    @Transactional
+    public void deleteVideo(Long videoId, String username) {
         Video video = videoRepository.findById(videoId)
                 .orElseThrow(() -> new CustomException(ErrorCode.VIDEO_NOT_FOUND));
-
-        if (!video.getSiteUser().getUsername().equals(siteUser.getUsername())) {
+        if (!video.getSiteUser().getUsername().equals(username)) {
             throw new CustomException(ErrorCode.FORBIDDEN);
         }
-
         videoRepository.delete(video);
     }
 
-    private VideoReturnDTO convertToDTO(Video video) {
-        VideoReturnDTO videoReturnDTO;
-        try {
-            videoReturnDTO = VideoReturnDTO.builder()
-                    .videoId(video.getId())
-                    .videoPath(video.getVideoPath())
-                    .videoName(video.getVideoName())
-                    .imageUrl(video.getSiteUser().getImageUrl())
-                    .username(video.getSiteUser().getUsername())
-                    .nickname(video.getSiteUser().getNickname())
-                    .thumbnail(video.getThumbnail())
-                    .question(video.getQuestion().getContents())
-                    .category(video.getQuestion().getQuestionSet().getCategory())
-                    .createdAt(video.getCreatedAt())
-                    .updatedAt(video.getUpdatedAt())
-                    .isOpen(video.isOpen())
-                    .build();
-        } catch (Exception e) {
-            log.error("Error converting Video to DTO: {}", e.getMessage(), e);
-            throw new RuntimeException("Failed to convert Video to DTO", e);
-        }
-        return videoReturnDTO;
-    }
-
     private VideoWithFeedbackDTO returnVideoWithFeedback(Video video) {
-        try {
-            VideoReturnDTO videoReturnDTO = VideoReturnDTO.builder()
-                    .videoId(video.getId())
-                    .videoPath(video.getVideoPath())
-                    .videoName(video.getVideoName())
-                    .imageUrl(video.getSiteUser().getImageUrl())
-                    .username(video.getSiteUser().getUsername())
-                    .nickname(video.getSiteUser().getNickname())
-                    .thumbnail(video.getThumbnail())
-                    .question(video.getQuestion().getContents())
-                    .category(video.getQuestion().getQuestionSet().getCategory())
-                    .createdAt(video.getCreatedAt())
-                    .updatedAt(video.getUpdatedAt())
-                    .isOpen(video.isOpen())
-                    .build();
-
-            if (video.getFeedback() == null) {
-                // null feedback으로 빌더 사용
-                return VideoWithFeedbackDTO.builder()
-                        .video(videoReturnDTO)
-                        .feedback(null)
-                        .build();
-            } else {
-
-                Feedback feedback = feedbackService.findFeedback(video.getFeedback().getId());
-                FeedbackReturnDTO feedbackReturnDTO = FeedbackReturnDTO.builder()
-                        .feedbackId(feedback.getId())
-                        .videoId(video.getId())
-                        .contents(feedback.getContents())
-                        .createdAt(feedback.getCreatedAt())
-                        .build();
-
-                return VideoWithFeedbackDTO.builder()
-                        .video(videoReturnDTO)
-                        .feedback(feedbackReturnDTO)
-                        .build();
-            }
-
-        } catch (Exception e) {
-            log.error("Error converting Video to DTO: {}", e.getMessage(), e);
-            throw new RuntimeException("Failed to convert Video to DTO", e);
+        VideoReturnDTO videoReturnDTO = VideoReturnDTO.from(video);
+        if (video.getFeedback() == null) {
+            return VideoWithFeedbackDTO.builder().video(videoReturnDTO).feedback(null).build();
         }
+        Feedback feedback = feedbackService.findFeedback(video.getFeedback().getId());
+        return VideoWithFeedbackDTO.builder()
+                .video(videoReturnDTO)
+                .feedback(FeedbackReturnDTO.from(feedback))
+                .build();
     }
 
     public boolean checkThreadPoolCapacity() {
@@ -1001,16 +914,13 @@ public class VideoService {
     }
 
     @Transactional
-    public Long enqueue(Long questionId, int requestNo, String videoKey, Boolean isOpen, long startTime) {
-        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        SiteUserSecurityDTO userDetails = (SiteUserSecurityDTO) auth.getPrincipal();
-
+    public Long enqueue(String username, Long questionId, int requestNo, String videoKey, Boolean isOpen, long startTime) {
         VideoProcessingQueue request = VideoProcessingQueue.builder()
                 .questionId(questionId)
                 .requestNo(requestNo)
                 .videoKey(videoKey)
                 .isOpen(isOpen)
-                .username(userDetails.getUsername())
+                .username(username)
                 .startTime(startTime)
                 .usePresignedUrl(true)
                 .build();

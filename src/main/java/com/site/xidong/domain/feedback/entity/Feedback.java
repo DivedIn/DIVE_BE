@@ -1,31 +1,31 @@
 package com.site.xidong.domain.feedback.entity;
 
 import com.site.xidong.domain.video.entity.Video;
+import com.site.xidong.global.response.BaseTimeEntity;
 import jakarta.persistence.*;
 import lombok.*;
 
-import java.time.LocalDateTime;
-
 @Entity
 @Getter
-@Setter
-@NoArgsConstructor
-@AllArgsConstructor
-@Builder
-public class Feedback {
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
+public class Feedback extends BaseTimeEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(nullable = false, name = "FEEDBACK_ID")
     private Long id;
 
-    @Lob  // 길이 제한 없이 저장 가능
-    @Column(columnDefinition = "TEXT")  // MySQL 기준 TEXT 타입으로 지정
+    @Lob
+    @Column(columnDefinition = "TEXT")
     private String contents;
 
-    private LocalDateTime createdAt;
-
-    @OneToOne
+    @OneToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "VIDEO_ID")
     private Video video;
+
+    @Builder
+    public Feedback(String contents, Video video) {
+        this.contents = contents;
+        this.video = video;
+    }
 }
