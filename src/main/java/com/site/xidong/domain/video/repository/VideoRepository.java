@@ -5,7 +5,7 @@ import org.springframework.data.jpa.repository.Query;
 
 import java.util.List;
 import java.util.Optional;
-import import com.site.xidong.domain.video.entity.Video;;
+import com.site.xidong.domain.video.entity.Video;
 
 public interface VideoRepository extends JpaRepository<Video, Long> {
     Optional<Video> findById(Long id);

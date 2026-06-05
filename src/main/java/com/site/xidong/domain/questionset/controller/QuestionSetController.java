@@ -7,12 +7,12 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
-import import com.site.xidong.domain.questionset.service.QuestionSetService;;
-import import com.site.xidong.domain.questionset.dto.QuestionSetReturnDTO;;
-import import com.site.xidong.domain.questionset.dto.QuestionSetCreateDTO;;
-import import com.site.xidong.domain.questionset.dto.QuestionSetUpdateDTO;;
-import import com.site.xidong.domain.questionset.dto.BringNRequest;;
-import import com.site.xidong.domain.questionset.exception.QuestionSetNotFoundException;;
+import com.site.xidong.domain.questionset.service.QuestionSetService;
+import com.site.xidong.domain.questionset.dto.QuestionSetReturnDTO;
+import com.site.xidong.domain.questionset.dto.QuestionSetCreateDTO;
+import com.site.xidong.domain.questionset.dto.QuestionSetUpdateDTO;
+import com.site.xidong.domain.questionset.dto.BringNRequest;
+import com.site.xidong.domain.questionset.exception.QuestionSetNotFoundException;
 
 @RequiredArgsConstructor
 @RestController
@@ -56,7 +56,7 @@ public class QuestionSetController {
     }
 
     @DeleteMapping("/{setId}/delete")
-    public ResponseEntity<?> delete(@PathVariable Long setId) throws Exception {
+    public ResponseEntity<?> delete(@PathVariable Long setId) {
         try {
             questionSetService.delete(setId);
         } catch(QuestionSetNotFoundException e) {

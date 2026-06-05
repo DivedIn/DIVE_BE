@@ -10,7 +10,7 @@ import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
 
 import java.util.Optional;
-import import com.site.xidong.domain.user.dto.SiteUserSecurityDTO;;
+import com.site.xidong.domain.user.dto.SiteUserSecurityDTO;
 
 @Log4j2
 @Service

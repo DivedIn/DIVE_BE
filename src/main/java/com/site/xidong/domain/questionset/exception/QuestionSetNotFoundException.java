@@ -1,10 +1,10 @@
 package com.site.xidong.domain.questionset.exception;
 
-public class QuestionSetNotFoundException extends Exception {
-    public QuestionSetNotFoundException() {
-    }
+import com.site.xidong.global.exception.CustomException;
+import com.site.xidong.global.exception.ErrorCode;
 
-    public QuestionSetNotFoundException(String message) {
-        super(message);
+public class QuestionSetNotFoundException extends CustomException {
+    public QuestionSetNotFoundException() {
+        super(ErrorCode.QUESTION_SET_NOT_FOUND);
     }
 }

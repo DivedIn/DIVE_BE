@@ -6,6 +6,9 @@ import com.site.xidong.domain.questionset.repository.QuestionSetRepository;
 import com.site.xidong.domain.user.dto.SiteUserSecurityDTO;
 import com.site.xidong.domain.user.entity.SiteUser;
 import com.site.xidong.domain.user.repository.SiteUserRepository;
+import com.site.xidong.domain.question.repository.QuestionRepository;
+import com.site.xidong.global.exception.CustomException;
+import com.site.xidong.global.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.security.core.Authentication;
@@ -14,9 +17,9 @@ import org.springframework.stereotype.Service;
 
 import java.util.List;
 import java.util.Optional;
-import import com.site.xidong.domain.question.entity.Question;;
-import import com.site.xidong.domain.question.dto.QuestionReturnDTO;;
-import import com.site.xidong.domain.question.exception.QuestionNotFoundException;;
+import com.site.xidong.domain.question.entity.Question;
+import com.site.xidong.domain.question.dto.QuestionReturnDTO;
+import com.site.xidong.domain.question.exception.QuestionNotFoundException;
 
 @Log4j2
 @Service
@@ -26,7 +29,7 @@ public class QuestionService {
     private final QuestionSetRepository questionSetRepository;
     private final SiteUserRepository siteUserRepository;
 
-    public QuestionReturnDTO create(Long id, String contents) throws Exception, QuestionSetNotFoundException {
+    public QuestionReturnDTO create(Long id, String contents) {
         Optional<QuestionSet> selectedSet = questionSetRepository.findById(id);
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         SiteUserSecurityDTO siteUserSecurityDTO = (SiteUserSecurityDTO) auth.getPrincipal();
@@ -36,7 +39,7 @@ public class QuestionService {
         if(selectedSet.isPresent()) {
             QuestionSet questionSet = selectedSet.get();
             if(!siteUser.getUsername().equals(questionSet.getSiteUser().getUsername())) {
-                throw new Exception("질문 추가 권한이 없습니다.");
+                throw new CustomException(ErrorCode.FORBIDDEN);
             } else {
                 Question question = Question.builder()
                         .questionSet(questionSet)
@@ -46,12 +49,12 @@ public class QuestionService {
                 questionReturnDTO = new QuestionReturnDTO(newQuestion.getId(), newQuestion.getContents());
             }
         } else {
-            throw new QuestionNotFoundException("면접세트를 찾을 수 없습니다.");
+            throw new QuestionNotFoundException();
         }
         return questionReturnDTO;
     }
 
-    public QuestionReturnDTO update(Long setId, Long id, String contents) throws Exception, QuestionNotFoundException {
+    public QuestionReturnDTO update(Long setId, Long id, String contents) {
         Optional<Question> selectedQ = questionRepository.findByQuestionSetIdAndId(setId, id);
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         SiteUserSecurityDTO siteUserSecurityDTO = (SiteUserSecurityDTO) auth.getPrincipal();
@@ -60,13 +63,13 @@ public class QuestionService {
         if(selectedQ.isPresent()) {
             Question question = selectedQ.get();
             if(!siteUser.getUsername().equals(question.getQuestionSet().getSiteUser().getUsername())) {
-                throw new Exception("삭제 권한이 없습니다.");
+                throw new CustomException(ErrorCode.FORBIDDEN);
             } else {
                 question.setContents(contents);
                 updatedQ = questionRepository.save(question);
             }
         } else {
-            throw new QuestionNotFoundException("질문을 찾을 수 없습니다.");
+            throw new QuestionNotFoundException();
         }
         QuestionReturnDTO questionReturnDTO = QuestionReturnDTO.builder()
                 .id(updatedQ.getId())
@@ -75,7 +78,7 @@ public class QuestionService {
         return questionReturnDTO;
     }
 
-    public void delete(Long setId, List<Long> questionIds) throws Exception, QuestionNotFoundException{
+    public void delete(Long setId, List<Long> questionIds){
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         SiteUserSecurityDTO siteUserSecurityDTO = (SiteUserSecurityDTO) auth.getPrincipal();
         SiteUser siteUser = siteUserRepository.findSiteUserByUsername(siteUserSecurityDTO.getUsername()).get();
@@ -84,12 +87,12 @@ public class QuestionService {
             if (selectedQ.isPresent()) {
                 Question question = selectedQ.get();
                 if (!siteUser.getUsername().equals(question.getQuestionSet().getSiteUser().getUsername())) {
-                    throw new Exception("삭제 권한이 없습니다.");
+                    throw new CustomException(ErrorCode.FORBIDDEN);
                 } else {
                     questionRepository.delete(question);
                 }
             } else {
-                throw new QuestionNotFoundException("질문을 찾을 수 없습니다.");
+                throw new QuestionNotFoundException();
             }
         }
     }

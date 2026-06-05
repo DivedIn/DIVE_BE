@@ -7,8 +7,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
-import import com.site.xidong.domain.comment.service.CommentService;;
-import import com.site.xidong.domain.comment.dto.CommentReturnDTO;;
+import com.site.xidong.domain.comment.service.CommentService;
+import com.site.xidong.domain.comment.dto.CommentReturnDTO;
 
 @RestController
 @Log4j2
@@ -30,7 +30,7 @@ public class CommentController {
     }
 
     @PutMapping("/{videoId}/{commentId}/update")
-    public ResponseEntity<CommentReturnDTO> update(@PathVariable Long videoId, @PathVariable Long commentId, @RequestBody String contents) throws Exception {
+    public ResponseEntity<CommentReturnDTO> update(@PathVariable Long videoId, @PathVariable Long commentId, @RequestBody String contents) {
         CommentReturnDTO commentReturnDTO;
         try {
             commentReturnDTO = commentService.update(videoId, commentId, contents);
@@ -41,7 +41,7 @@ public class CommentController {
     }
 
     @DeleteMapping("/{videoId}/{commentId}/delete")
-    public ResponseEntity<CommentReturnDTO> delete(@PathVariable Long videoId, @PathVariable Long commentId, @RequestBody String contents) throws Exception {
+    public ResponseEntity<CommentReturnDTO> delete(@PathVariable Long videoId, @PathVariable Long commentId, @RequestBody String contents) {
         try {
             commentService.delete(videoId, commentId, contents);
         } catch (Exception e) {

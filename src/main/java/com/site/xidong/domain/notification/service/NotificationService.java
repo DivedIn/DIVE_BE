@@ -12,7 +12,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.io.IOException;
-import import com.site.xidong.domain.notification.repository.EmitterRepository;;
+import com.site.xidong.domain.notification.repository.EmitterRepository;
 
 @Service
 @RequiredArgsConstructor
@@ -25,7 +25,7 @@ public class NotificationService {
     private final EmitterRepository emitterRepository;
 
     @Transactional(readOnly = true)
-    public SseEmitter connectNotification() throws Exception {
+    public SseEmitter connectNotification() {
         log.info("SSE 연결 프로세스 시작");
 
         SseEmitter sseEmitter = null;
@@ -89,7 +89,7 @@ public class NotificationService {
                 if (username != null) {
                     emitterRepository.delete(username);
                 }
-                throw new Exception("Failed to Connect SSE", exception);
+                throw new RuntimeException("Failed to Connect SSE", exception);
             }
 
             log.info("SSE 연결 프로세스 완료 - {} 사용자의 연결 설정됨", username);

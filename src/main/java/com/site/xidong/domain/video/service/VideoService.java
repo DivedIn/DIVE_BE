@@ -16,6 +16,8 @@ import com.site.xidong.domain.queue.repository.VideoProcessingQueueRepository;
 import com.site.xidong.domain.user.dto.SiteUserSecurityDTO;
 import com.site.xidong.domain.user.entity.SiteUser;
 import com.site.xidong.domain.user.repository.SiteUserRepository;
+import com.site.xidong.global.exception.CustomException;
+import com.site.xidong.global.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
@@ -62,10 +64,11 @@ import java.time.LocalDateTime;
 import java.util.*;
 import java.util.List;
 import java.util.concurrent.*;
-import import com.site.xidong.domain.video.entity.Video;;
-import import com.site.xidong.domain.video.repository.VideoRepository;;
-import import com.site.xidong.domain.video.dto.VideoReturnDTO;;
-import import com.site.xidong.domain.video.dto.VideoWithFeedbackDTO;;
+import com.site.xidong.domain.feedback.service.AwsTranscribe;
+import com.site.xidong.domain.video.entity.Video;
+import com.site.xidong.domain.video.repository.VideoRepository;
+import com.site.xidong.domain.video.dto.VideoReturnDTO;
+import com.site.xidong.domain.video.dto.VideoWithFeedbackDTO;
 
 @Slf4j
 @Service
@@ -266,7 +269,7 @@ public class VideoService {
     }
 
     @Transactional(propagation = Propagation.REQUIRED)
-    public void handleValidAnswer(Long videoId, String username, String answer) throws Exception {
+    public void handleValidAnswer(Long videoId, String username, String answer) {
         long start = System.currentTimeMillis();
         Video video = videoRepository.findById(videoId)
                 .orElseThrow(() -> new RuntimeException("Video not found with id: " + videoId));
@@ -843,7 +846,7 @@ public class VideoService {
         }
     }
 
-    public VideoWithFeedbackDTO getVideoWithFeedback(Long videoId) throws Exception {
+    public VideoWithFeedbackDTO getVideoWithFeedback(Long videoId) {
         Video video = videoRepository.findById(videoId)
                 .orElseThrow(QuestionNotFoundException::new);
         return returnVideoWithFeedback(video);
@@ -869,17 +872,17 @@ public class VideoService {
                 .toList();
     }
 
-    public VideoReturnDTO changeVisibility(Long videoId, Boolean isOpen) throws Exception {
+    public VideoReturnDTO changeVisibility(Long videoId, Boolean isOpen) {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         SiteUserSecurityDTO siteUserSecurityDTO = (SiteUserSecurityDTO) auth.getPrincipal();
         SiteUser siteUser = siteUserRepository.findSiteUserByUsername(siteUserSecurityDTO.getUsername())
-                .orElseThrow(() -> new Exception("User not found"));
+                .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
 
         Video video = videoRepository.findById(videoId)
-                .orElseThrow(() -> new Exception("Video not found"));
+                .orElseThrow(() -> new CustomException(ErrorCode.VIDEO_NOT_FOUND));
 
         if (!video.getSiteUser().getUsername().equals(siteUser.getUsername())) {
-            throw new Exception("수정 권한이 없습니다.");
+            throw new CustomException(ErrorCode.FORBIDDEN);
         }
         video.setOpen(isOpen);
         video.setUpdatedAt(LocalDateTime.now());
@@ -888,17 +891,17 @@ public class VideoService {
         return convertToDTO(updatedVideo);
     }
 
-    public void deleteVideo(Long videoId) throws Exception {
+    public void deleteVideo(Long videoId) {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         SiteUserSecurityDTO siteUserSecurityDTO = (SiteUserSecurityDTO) auth.getPrincipal();
         SiteUser siteUser = siteUserRepository.findSiteUserByUsername(siteUserSecurityDTO.getUsername())
-                .orElseThrow(() -> new Exception("User not found"));
+                .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
 
         Video video = videoRepository.findById(videoId)
-                .orElseThrow(() -> new Exception("Video not found"));
+                .orElseThrow(() -> new CustomException(ErrorCode.VIDEO_NOT_FOUND));
 
         if (!video.getSiteUser().getUsername().equals(siteUser.getUsername())) {
-            throw new Exception("삭제 권한이 없습니다.");
+            throw new CustomException(ErrorCode.FORBIDDEN);
         }
 
         videoRepository.delete(video);

@@ -1,5 +1,6 @@
 package com.site.xidong.domain.video.monitor;
 
+import com.site.xidong.domain.video.service.SlackService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
