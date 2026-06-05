@@ -1,7 +1,7 @@
 package com.site.xidong.config;
 
-import com.site.xidong.security.JwtAuthenticationFilter;
-import com.site.xidong.security.JwtTokenProvider;
+import com.site.xidong.global.jwt.JwtAuthenticationFilter;
+import com.site.xidong.global.jwt.JwtTokenProvider;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
