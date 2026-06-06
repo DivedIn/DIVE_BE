@@ -58,19 +58,109 @@ Java 17, Spring Boot 3.3, Spring Data JPA, MySQL 8.0, AWS EC2, Github Actions, S
 ## 패키지 구조
 
 ```
-src/main/java/com/site/xidong/
-├── config/           # 보안, AWS, Swagger, 비동기 등 애플리케이션 설정
-├── security/         # JWT 인증 필터, 소셜 로그인(Kakao/Naver) 처리
-├── siteUser/         # 회원 도메인 (엔티티, 서비스, 컨트롤러)
-├── question/         # 면접 질문 도메인
-├── questionSet/      # 면접 질문 세트 도메인
-├── video/            # 영상 업로드·조회·처리 도메인 (FFmpeg, S3, Presigned URL)
-├── feedback/         # AI 피드백 도메인 (Claude API 호출, AWS Transcribe / Whisper STT)
-├── comment/          # 영상 댓글 도메인
-├── notification/     # SSE 기반 실시간 알림
-├── queue/            # DB 기반 영상 처리 비동기 큐 (VideoProcessingQueue, Scheduler)
-├── utils/            # S3 업로더, 에러 응답 공통 유틸
-└── exception/        # 공통 예외 처리
+⏺ src/main/java/com/site/xidong
+  ├── XidongApplication.java
+  │
+  ├── config
+  │   ├── AsyncConfig.java
+  │   ├── AwsV2Config.java
+  │   ├── CustomSecurityConfig.java
+  │   ├── JpaConfig.java
+  │   ├── RestTemplateConfig.java
+  │   ├── S3Config.java
+  │   └── SwaggerConfig.java
+  │
+  ├── domain
+  │   ├── comment
+  │   │   ├── controller/CommentController.java
+  │   │   ├── dto/CommentReturnDTO.java
+  │   │   ├── entity/Comment.java
+  │   │   ├── repository/CommentRepository.java
+  │   │   └── service/CommentService.java
+  │   │
+  │   ├── feedback
+  │   │   ├── controller/FeedbackController.java
+  │   │   ├── dto/{AnswerDTO, FeedbackReturnDTO, Status}
+  │   │   ├── entity/Feedback.java
+  │   │   ├── repository/FeedbackRepository.java
+  │   │   └── service
+  │   │       ├── AwsTranscribe.java
+  │   │       ├── ClaudeApiClient.java
+  │   │       ├── FeedbackService.java
+  │   │       └── LocalWhisperService.java
+  │   │
+  │   ├── notification
+  │   │   ├── controller/NotificationController.java
+  │   │   ├── dto/{CommentNotificationDTO, VideoNotificationDTO}
+  │   │   ├── entity/Notification.java
+  │   │   ├── repository/EmitterRepository.java
+  │   │   └── service/NotificationService.java
+  │   │
+  │   ├── question
+  │   │   ├── controller/QuestionController.java
+  │   │   ├── dto/QuestionReturnDTO.java
+  │   │   ├── entity/Question.java
+  │   │   ├── exception/QuestionNotFoundException.java
+  │   │   ├── repository/QuestionRepository.java
+  │   │   └── service/QuestionService.java
+  │   │
+  │   ├── questionset
+  │   │   ├── controller/QuestionSetController.java
+  │   │   ├── dto/{BringNRequest, QuestionSetCreateDTO, QuestionSetReturnDTO, QuestionSetUpdateDTO}
+  │   │   ├── entity/{Category, QuestionSet}
+  │   │   ├── exception/QuestionSetNotFoundException.java
+  │   │   ├── repository/QuestionSetRepository.java
+  │   │   └── service/QuestionSetService.java
+  │   │
+  │   ├── queue
+  │   │   ├── entity/VideoProcessingQueue.java
+  │   │   ├── repository/VideoProcessingQueueRepository.java
+  │   │   └── scheduler
+  │   │       ├── VideoQueueProcessor.java
+  │   │       └── VideoQueueScheduler.java
+  │   │
+  │   ├── user
+  │   │   ├── controller/{AuthController, SiteUserController}
+  │   │   ├── dto/{KakaoDTO, NaverDTO, SiteUserDTO, SiteUserJoinDTO, SiteUserLoginDTO, Token}
+  │   │   ├── entity/{LoginMethod, Role, SiteUser}
+  │   │   ├── repository/SiteUserRepository.java
+  │   │   └── service
+  │   │       ├── AuthService.java
+  │   │       ├── CustomUserDetailsService.java
+  │   │       ├── KakaoUtil.java
+  │   │       ├── NaverUtil.java
+  │   │       └── SiteUserService.java
+  │   │
+  │   └── video
+  │       ├── controller/VideoController.java
+  │       ├── dto/{VideoReturnDTO, VideoUploadCompleteRequest, VideoWithFeedbackDTO}
+  │       ├── entity/Video.java
+  │       ├── monitor/ThreadPoolMonitor.java
+  │       ├── repository/VideoRepository.java
+  │       └── service
+  │           ├── SlackService.java
+  │           ├── SttService.java
+  │           ├── ThumbnailService.java
+  │           ├── VideoProcessingService.java
+  │           └── VideoService.java
+  │
+  └── global
+      ├── exception
+      │   ├── CustomException.java
+      │   ├── ErrorCode.java
+      │   ├── ErrorResponse.java
+      │   └── GlobalExceptionHandler.java
+      ├── infra
+      │   ├── LocalUploader.java
+      │   └── S3Uploader.java
+      ├── jwt
+      │   ├── JwtAuthenticationFilter.java
+      │   └── JwtTokenProvider.java
+      └── response
+          ├── ApiResponse.java
+          └── BaseTimeEntity.java
+
+
 ```
 
 ## Database Schema
