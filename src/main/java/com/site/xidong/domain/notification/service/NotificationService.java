@@ -64,7 +64,7 @@ public class NotificationService {
                 log.info("Emitter 찾음 - hash: {}", System.identityHashCode(sseEmitter));
             } catch (IOException e) {
                 emitterRepository.delete(username);
-                throw new Error("Failed to Connect SSE");
+                throw new CustomException(ErrorCode.INTERNAL_SERVER_ERROR);
             }
         }, () -> log.info("Emitter 없음 - {}", username));
     }
