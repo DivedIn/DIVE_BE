@@ -32,6 +32,9 @@ public enum ErrorCode {
     DUPLICATE_RESOURCE(409, "데이터가 이미 존재합니다"),
     EMAIL_ALREADY_EXISTS(409, "이미 사용 중인 이메일입니다"),
     // 500
+    STT_TIMEOUT(500, "음성 변환 시간이 초과되었습니다"),
+    STT_FAILED(500, "음성 변환에 실패했습니다"),
+    AI_API_ERROR(500, "AI 피드백 생성에 실패했습니다"),
     INTERNAL_SERVER_ERROR(500, "서버 오류가 발생했습니다");
 
     private final int status;
