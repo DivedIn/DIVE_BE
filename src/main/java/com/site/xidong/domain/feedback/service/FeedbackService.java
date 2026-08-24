@@ -12,12 +12,10 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 @Log4j2
 @Service
 @RequiredArgsConstructor
-@Transactional(readOnly = true)
 public class FeedbackService {
 
     private final VideoRepository videoRepository;
@@ -30,9 +28,11 @@ public class FeedbackService {
     @Value("${whisper.mock.delay-ms:20000}")
     private long mockDelayMs;
 
-    @Transactional
+    // [커넥션 점유 개선] 의도적으로 @Transactional을 달지 않는다.
+    // Claude 응답 대기(mock sleep 또는 실제 API 호출)는 DB I/O가 아니므로 커넥션을 물고 있으면 안 된다.
+    // 아래 두 리포지토리 호출은 각각 Spring Data JPA가 자동으로 짧은 트랜잭션을 열고/닫아 처리한다.
     public FeedbackReturnDTO getFeedback(AnswerDTO answerDTO) {
-        Video video = videoRepository.findById(answerDTO.getVideoId())
+        Video video = videoRepository.findByIdWithQuestion(answerDTO.getVideoId())
                 .orElseThrow(() -> new CustomException(ErrorCode.VIDEO_NOT_FOUND));
 
         String feedbackText = mockEnabled
