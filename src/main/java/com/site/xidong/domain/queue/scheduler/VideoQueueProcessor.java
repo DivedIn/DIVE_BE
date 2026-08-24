@@ -10,6 +10,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
@@ -65,5 +66,19 @@ public class VideoQueueProcessor {
             log.info("작업 완료: queueId={}", taskId);
             queueRepository.delete(task);
         }
+    }
+
+    // [Reaper] PROCESSING인 채로 threshold를 넘겨 멈춰버린(워커 강제 종료 등) 좀비 작업을 회수한다.
+    // markFailed()가 재시도 가능 여부를 판단해 PENDING(백오프 후 재수거)이나 FAILED(DLQ)로 되돌린다.
+    @Transactional
+    public void reapStuckTasks(LocalDateTime threshold) {
+        List<VideoProcessingQueue> stuckTasks = queueRepository.findStuckProcessingTasksForUpdate(threshold);
+        if (stuckTasks.isEmpty()) return;
+
+        for (VideoProcessingQueue task : stuckTasks) {
+            log.warn("[Reaper] 좀비 작업 회수: queueId={}, startedAt={}", task.getId(), task.getStartedAt());
+            task.markFailed();
+        }
+        queueRepository.saveAll(stuckTasks);
     }
 }
