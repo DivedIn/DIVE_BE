@@ -4,68 +4,43 @@ import com.site.xidong.domain.feedback.dto.AnswerDTO;
 import com.site.xidong.domain.feedback.dto.FeedbackReturnDTO;
 import com.site.xidong.domain.feedback.entity.Feedback;
 import com.site.xidong.domain.feedback.service.FeedbackService;
-import com.site.xidong.domain.notification.dto.VideoNotificationDTO;
-import com.site.xidong.domain.notification.service.NotificationService;
-import com.site.xidong.domain.question.entity.Question;
-import com.site.xidong.domain.question.exception.QuestionNotFoundException;
-import com.site.xidong.domain.question.repository.QuestionRepository;
-import com.site.xidong.domain.user.entity.SiteUser;
-import com.site.xidong.domain.user.repository.SiteUserRepository;
-import com.site.xidong.domain.video.entity.Video;
-import com.site.xidong.domain.video.repository.VideoRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Propagation;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.util.concurrent.CompletableFuture;
 
+/**
+ * 영상 처리 오케스트레이션 전담. DB 저장이 필요한 지점은 전부 {@link VideoProcessingTxService}
+ * (별도 빈)에 위임한다 — 이 클래스 안에는 @Transactional이 하나도 없다.
+ *
+ * [커넥션 점유 개선] STT/썸네일/Claude mock 같은 외부 I/O는 DB 커넥션을 물 이유가 없는데,
+ * 예전엔 같은 클래스 안에서 트랜잭션 메서드를 this.xxx()로 직접 호출(self-invocation)하는 바람에
+ * @Transactional이 프록시를 못 타고 무력화되어, 상위에서 열어둔 트랜잭션 하나가 이 메서드들이
+ * 감싸고 있던 20초 넘는 sleep 구간까지 통째로 깔고 앉아 있었다. 저장 로직을 물리적으로 다른 빈
+ * (VideoProcessingTxService)으로 옮기면, 그 빈을 호출하는 순간 항상 실제 프록시를 거치므로
+ * 이 문제가 애초에 발생할 수 없다.
+ */
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class VideoProcessingService {
 
-    private final VideoRepository videoRepository;
-    private final SiteUserRepository siteUserRepository;
-    private final QuestionRepository questionRepository;
-    private final ThumbnailService thumbnailService;
     private final SttService sttService;
+    private final ThumbnailService thumbnailService;
     private final FeedbackService feedbackService;
-    private final NotificationService notificationService;
-
-    @Value("${cloud.aws.s3.bucket}")
-    private String bucket;
-
-    @Value("${cloud.aws.region.static}")
-    private String region;
+    private final VideoProcessingTxService txService;
 
     @Async("videoProcessingExecutor")
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public CompletableFuture<Void> createInitial(
             String username, Long questionId, int requestNo,
             String videoKey, Boolean isOpen, long startTime) {
         try {
-            SiteUser user = siteUserRepository.findSiteUserByUsername(username)
-                    .orElseThrow(() -> new IllegalStateException("사용자를 찾을 수 없습니다: " + username));
-            Question question = questionRepository.findById(questionId)
-                    .orElseThrow(QuestionNotFoundException::new);
+            Long videoId = txService.saveInitialVideo(username, questionId, videoKey, isOpen);
 
-            String videoUrl = String.format("https://%s.s3.%s.amazonaws.com/%s", bucket, region, videoKey);
-            Video video = Video.builder()
-                    .videoPath(videoUrl)
-                    .videoName(videoKey)
-                    .siteUser(user)
-                    .question(question)
-                    .isOpen(isOpen)
-                    .processingStatus("PROCESSING")
-                    .build();
-            Video saved = videoRepository.save(video);
-            log.info("비디오 초기 저장 완료: ID={}", saved.getId());
-
-            processVideo(saved.getId(), requestNo, videoKey, username, startTime);
+            // processVideo()는 트랜잭션 밖에서 실행된다: STT/Claude mock 대기(외부 I/O) 동안 커넥션을 물지 않는다.
+            processVideo(videoId, requestNo, videoKey, username, startTime);
 
             return CompletableFuture.completedFuture(null);
         } catch (Exception e) {
@@ -74,8 +49,8 @@ public class VideoProcessingService {
         }
     }
 
-    // Direct call is fine: @Transactional(REQUIRED) joins the REQUIRES_NEW tx already in ThreadLocal.
-    @Transactional(propagation = Propagation.REQUIRED)
+    // 트랜잭션 없음. STT/썸네일/Claude 등 외부 I/O를 실행하고,
+    // 실제 DB 저장이 필요한 지점만 txService(다른 빈)에 위임해 짧은 트랜잭션으로 처리한다.
     public void processVideo(Long videoId, int requestNo, String videoKey, String username, long startTime) {
         long procStart = System.currentTimeMillis();
         try {
@@ -83,7 +58,7 @@ public class VideoProcessingService {
             boolean isLongVideo = durationSeconds > 300;
 
             String thumbnailUrl = thumbnailService.generate(videoKey);
-            updateVideoThumbnailAndStatus(videoId, thumbnailUrl);
+            txService.updateVideoThumbnailAndStatus(videoId, thumbnailUrl);
 
             String answer = isLongVideo
                     ? sttService.transcribeLongVideo(videoKey, durationSeconds)
@@ -94,7 +69,7 @@ public class VideoProcessingService {
 
             if (!isValidAnswer(answer)) {
                 log.warn("유효한 답변 없음: videoId={}", videoId);
-                handleInvalidAnswer(videoId, username, answer);
+                txService.handleInvalidAnswer(videoId, username, answer);
                 return;
             }
 
@@ -104,64 +79,22 @@ public class VideoProcessingService {
                     videoId, requestNo, System.currentTimeMillis() - startTime);
         } catch (Exception e) {
             log.error("비디오 비동기 처리 중 오류: videoId={}", videoId, e);
-            handleError(videoId, username);
+            txService.handleError(videoId, username);
         }
     }
 
-    @Transactional(propagation = Propagation.REQUIRED)
-    public void updateVideoThumbnailAndStatus(Long videoId, String thumbnailUrl) {
-        Video video = videoRepository.findById(videoId)
-                .orElseThrow(() -> new RuntimeException("Video not found: " + videoId));
-        video.updateThumbnail(thumbnailUrl);
-        video.updateStatus("TRANSCRIBING");
-    }
-
-    @Transactional(propagation = Propagation.REQUIRED)
-    public void handleInvalidAnswer(Long videoId, String username, String answer) {
-        log.warn("유효한 답변 없음: videoId={}, answer='{}'", videoId, answer);
-        videoRepository.findById(videoId).ifPresent(video -> {
-            video.updateStatus("NO_RESPONSE");
-            notificationService.send(username, "video-processed",
-                    VideoNotificationDTO.builder()
-                            .videoId(videoId).status("NO_RESPONSE")
-                            .message("녹화된 답변이 감지되지 않았습니다. 다시 시도해주세요.")
-                            .build());
-        });
-    }
-
-    @Transactional(propagation = Propagation.REQUIRED)
+    // 트랜잭션 없음. feedbackService.getFeedback() 안에서 Claude 응답 대기(mock sleep)가 일어나므로
+    // 이 메서드가 커넥션을 물고 있으면 안 된다. DB 반영은 txService.completeVideoWithFeedback()에서 짧게 처리한다.
     public void handleValidAnswer(Long videoId, String username, String answer) {
         long start = System.currentTimeMillis();
-        Video video = videoRepository.findById(videoId)
-                .orElseThrow(() -> new RuntimeException("Video not found: " + videoId));
 
         FeedbackReturnDTO feedbackDTO = feedbackService.getFeedback(
                 AnswerDTO.builder().videoId(videoId).answer(answer).build());
         Feedback feedback = feedbackService.findFeedback(feedbackDTO.getFeedbackId());
 
-        video.updateStatus("COMPLETED");
-        video.linkFeedback(feedback);
-
-        notificationService.send(username, "video-processed",
-                VideoNotificationDTO.builder()
-                        .videoId(videoId).status("COMPLETED")
-                        .message("비디오 처리가 완료되었습니다.")
-                        .feedbackId(feedbackDTO.getFeedbackId())
-                        .build());
+        txService.completeVideoWithFeedback(videoId, username, feedback, feedbackDTO.getFeedbackId());
 
         log.info("피드백 생성 완료: videoId={}, 소요={}ms", videoId, System.currentTimeMillis() - start);
-    }
-
-    @Transactional(propagation = Propagation.REQUIRED)
-    public void handleError(Long videoId, String username) {
-        videoRepository.findById(videoId).ifPresent(video -> {
-            video.updateStatus("ERROR");
-            notificationService.send(username, "video-processed",
-                    VideoNotificationDTO.builder()
-                            .videoId(videoId).status("ERROR")
-                            .message("비디오 처리 중 오류가 발생했습니다.")
-                            .build());
-        });
     }
 
     private boolean isValidAnswer(String answer) {

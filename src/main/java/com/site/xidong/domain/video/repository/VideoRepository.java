@@ -15,4 +15,7 @@ public interface VideoRepository extends JpaRepository<Video, Long> {
 
     @Query("SELECT v FROM Video v WHERE v.siteUser.username = :username")
     List<Video> findMyVideos(String username);
+
+    @Query("SELECT v FROM Video v JOIN FETCH v.question WHERE v.id = :id")
+    Optional<Video> findByIdWithQuestion(Long id);
 }
