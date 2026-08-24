@@ -27,7 +27,8 @@ public class VideoQueueProcessor {
     // 커밋된 뒤에는 이미 PROCESSING이라 그 트랜잭션의 WHERE status = 'PENDING' 에 더 이상 걸리지 않는다.
     @Transactional
     public List<VideoProcessingQueue> claimPendingTasks(int limit) {
-        List<VideoProcessingQueue> tasks = queueRepository.findPendingTasksForUpdate(PageRequest.of(0, limit));
+        List<VideoProcessingQueue> tasks = queueRepository.findPendingTasksForUpdate(
+                LocalDateTime.now(), PageRequest.of(0, limit));
         tasks.forEach(VideoProcessingQueue::markProcessing);
         return tasks;
     }
