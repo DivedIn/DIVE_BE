@@ -51,6 +51,9 @@ public class VideoProcessingQueue {
     @Column
     private Integer retryCount = 0;
 
+    @Column
+    private LocalDateTime nextRetryAt;
+
     @Builder
     public VideoProcessingQueue(Long questionId, int requestNo, String videoKey, Boolean isOpen,
                                 Long startTime, Boolean usePresignedUrl, String username) {
@@ -72,10 +75,25 @@ public class VideoProcessingQueue {
         this.status = QueueStatus.COMPLETED;
     }
 
+    // [재시도] retryCount가 MAX_RETRY 미만이면 지수 백오프를 걸고 PENDING으로 되돌려
+    // 스케줄러가 다시 집어가게 한다. 소진되면 FAILED로 확정해 더 이상 재수거되지 않는 DLQ 상태로 둔다.
     public void markFailed() {
-        this.status = QueueStatus.FAILED;
-        this.retryCount++;
+        if (this.retryCount < MAX_RETRY) {
+            this.retryCount++;
+            this.status = QueueStatus.PENDING;
+            this.nextRetryAt = LocalDateTime.now().plusSeconds(backoffSeconds(this.retryCount));
+        } else {
+            this.status = QueueStatus.FAILED;
+            this.nextRetryAt = null;
+        }
     }
+
+    private long backoffSeconds(int retryCount) {
+        return BASE_DELAY_SECONDS * (1L << retryCount);
+    }
+
+    public static final int MAX_RETRY = 3;
+    private static final long BASE_DELAY_SECONDS = 10L;
 
     public enum QueueStatus {
         PENDING, PROCESSING, COMPLETED, FAILED
