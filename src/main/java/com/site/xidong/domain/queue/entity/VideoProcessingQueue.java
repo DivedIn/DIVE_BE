@@ -63,9 +63,15 @@ public class VideoProcessingQueue {
     @Column
     private LocalDateTime nextRetryAt;
 
+    // [관측 가능성] enqueue 시점(HTTP 요청 스레드)의 MDC traceId를 그대로 실어둔다.
+    // 실제 처리는 나중에(스케줄러 tick) 완전히 다른 스레드에서 일어나므로, 이 컬럼이 없으면
+    // "어느 202 응답이 이 처리 결과인지" 이어줄 방법이 DB 밖에 없다.
+    @Column
+    private String traceId;
+
     @Builder
     public VideoProcessingQueue(Long questionId, int requestNo, String videoKey, Boolean isOpen,
-                                Long startTime, Boolean usePresignedUrl, String username) {
+                                Long startTime, Boolean usePresignedUrl, String username, String traceId) {
         this.questionId = questionId;
         this.requestNo = requestNo;
         this.videoKey = videoKey;
@@ -73,6 +79,7 @@ public class VideoProcessingQueue {
         this.startTime = startTime;
         this.usePresignedUrl = usePresignedUrl;
         this.username = username;
+        this.traceId = traceId;
     }
 
     public void markProcessing() {

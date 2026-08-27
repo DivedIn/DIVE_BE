@@ -10,8 +10,10 @@ import com.site.xidong.domain.user.entity.SiteUser;
 import com.site.xidong.domain.user.repository.SiteUserRepository;
 import com.site.xidong.domain.video.entity.Video;
 import com.site.xidong.domain.video.repository.VideoRepository;
+import com.site.xidong.global.filter.TraceIdFilter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.slf4j.MDC;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
@@ -81,6 +83,7 @@ public class VideoProcessingTxService {
                     VideoNotificationDTO.builder()
                             .videoId(videoId).status("NO_RESPONSE")
                             .message("녹화된 답변이 감지되지 않았습니다. 다시 시도해주세요.")
+                            .traceId(MDC.get(TraceIdFilter.TRACE_ID_KEY))
                             .build());
         });
     }
@@ -98,6 +101,7 @@ public class VideoProcessingTxService {
                         .videoId(videoId).status("COMPLETED")
                         .message("비디오 처리가 완료되었습니다.")
                         .feedbackId(feedbackId)
+                        .traceId(MDC.get(TraceIdFilter.TRACE_ID_KEY))
                         .build());
     }
 
@@ -109,6 +113,7 @@ public class VideoProcessingTxService {
                     VideoNotificationDTO.builder()
                             .videoId(videoId).status("ERROR")
                             .message("비디오 처리 중 오류가 발생했습니다.")
+                            .traceId(MDC.get(TraceIdFilter.TRACE_ID_KEY))
                             .build());
         });
     }
