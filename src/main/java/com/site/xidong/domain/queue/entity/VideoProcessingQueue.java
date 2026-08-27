@@ -7,8 +7,17 @@ import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
 
+// [SKIP LOCKED] status/created_at에 인덱스가 없으면 클레임 쿼리가 풀 테이블 스캔 + filesort로
+// 실행된다. InnoDB는 FOR UPDATE(SKIP LOCKED 포함)에서 정렬·LIMIT을 적용하기 전, 스캔 중 만난
+// WHERE 조건 일치 행을 전부 잠그기 때문에 — LIMIT 20을 걸어도 실제로는 status='PENDING'인
+// 행 전부가 잠긴다. 즉 인덱스 없이는 SKIP LOCKED를 붙여도 이름만 SKIP LOCKED일 뿐 동작은
+// 예전 풀 테이블 락과 같다(실측: 40개 중 20개만 반환됐지만 40개 전부가 잠겨, 두 번째 트랜잭션의
+// SKIP LOCKED 조회가 빈 결과를 받았다). 이 인덱스로 (status, created_at) 순서를 그대로
+// 인덱스에서 읽게 해 filesort를 없애고, LIMIT에 닿는 즉시 스캔을 멈추게 한다.
 @Entity
-@Table(name = "video_processing_queue")
+@Table(name = "video_processing_queue", indexes = {
+        @Index(name = "idx_queue_status_created_at", columnList = "status, created_at")
+})
 @Getter
 @NoArgsConstructor
 public class VideoProcessingQueue {
