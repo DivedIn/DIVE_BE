@@ -12,9 +12,11 @@ import com.site.xidong.domain.video.entity.Video;
 import com.site.xidong.domain.video.repository.VideoRepository;
 import com.site.xidong.global.exception.CustomException;
 import com.site.xidong.global.exception.ErrorCode;
+import com.site.xidong.global.filter.TraceIdFilter;
 import com.site.xidong.global.response.CursorPageResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.slf4j.MDC;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.data.domain.PageRequest;
@@ -111,6 +113,8 @@ public class VideoService {
 
     @Transactional
     public Long enqueue(String username, Long questionId, int requestNo, String videoKey, Boolean isOpen, long startTime) {
+        // [관측 가능성] 지금(HTTP 요청 스레드)의 traceId를 큐 행에 실어둔다 — 실제 처리는
+        // 나중에 스케줄러 tick에서 전혀 다른 스레드가 집어가므로, 여기서 안 실어두면 유실된다.
         VideoProcessingQueue request = VideoProcessingQueue.builder()
                 .questionId(questionId)
                 .requestNo(requestNo)
@@ -119,6 +123,7 @@ public class VideoService {
                 .username(username)
                 .startTime(startTime)
                 .usePresignedUrl(true)
+                .traceId(MDC.get(TraceIdFilter.TRACE_ID_KEY))
                 .build();
         VideoProcessingQueue saved = queueRepository.save(request);
         log.info("DB 큐 저장 완료: queueId={}, videoKey={}, 대기: {}개",

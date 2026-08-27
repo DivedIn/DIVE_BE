@@ -4,12 +4,14 @@ import com.site.xidong.domain.video.dto.VideoReturnDTO;
 import com.site.xidong.domain.video.dto.VideoUploadCompleteRequest;
 import com.site.xidong.domain.video.dto.VideoWithFeedbackDTO;
 import com.site.xidong.domain.video.service.VideoService;
+import com.site.xidong.global.filter.TraceIdFilter;
 import com.site.xidong.global.infra.S3Uploader;
 import com.site.xidong.global.response.ApiResponse;
 import com.site.xidong.global.response.CursorPageResponse;
 import io.micrometer.core.annotation.Timed;
 import lombok.extern.log4j.Log4j2;
 import org.joda.time.DateTime;
+import org.slf4j.MDC;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
@@ -68,9 +70,13 @@ public class VideoController {
                 ud.getUsername(), request.getQuestionId(), request.getRequestNo(),
                 request.getVideoKey(), request.isOpen(), startTime);
 
+        // [관측 가능성] queueId만으론 나중에 SSE로 오는 video-processed 이벤트와 이어줄 수
+        // 없었다(그 이벤트엔 videoId만 있음) — 같은 traceId를 여기와 SSE 페이로드 양쪽에
+        // 실어서, 클라이언트가 "이 202 응답이 결국 어떤 알림으로 이어졌는지"를 맞춰볼 수 있게 한다.
         return ResponseEntity.accepted().body(ApiResponse.success(Map.of(
                 "status", "queued",
                 "queueId", queueId.toString(),
+                "traceId", String.valueOf(MDC.get(TraceIdFilter.TRACE_ID_KEY)),
                 "message", "요청이 메시지 큐에 추가되었습니다"
         )));
     }

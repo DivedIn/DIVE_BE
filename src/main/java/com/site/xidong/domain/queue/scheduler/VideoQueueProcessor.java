@@ -3,8 +3,10 @@ package com.site.xidong.domain.queue.scheduler;
 import com.site.xidong.domain.queue.entity.VideoProcessingQueue;
 import com.site.xidong.domain.queue.repository.VideoProcessingQueueRepository;
 import com.site.xidong.domain.video.service.VideoProcessingService;
+import com.site.xidong.global.filter.TraceIdFilter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.slf4j.MDC;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -31,7 +33,14 @@ public class VideoQueueProcessor {
         return tasks;
     }
 
+    // [관측 가능성] enqueue 시점(HTTP 요청 스레드)에 심어둔 traceId를 이 스케줄러 스레드의
+    // MDC로 되살린다. 이 메서드 자체는 스케줄러 tick 하나가 여러 작업을 순회하며 호출하므로
+    // 반드시 작업 하나 처리가 끝나면 지워야(finally) 다음 작업에 이전 traceId가 새지 않는다.
+    // videoProcessingService.createInitial(...)은 @Async라 제출 시점에 TaskDecorator가
+    // 지금 MDC를 복사해가므로, 그 이후의 비동기 처리 로그에도 이 traceId가 이어진다.
     public void dispatchTask(VideoProcessingQueue task) {
+        String traceId = task.getTraceId();
+        MDC.put(TraceIdFilter.TRACE_ID_KEY, traceId);
         try {
             log.info("[DB Queue] 작업 시작: {}", task.getId());
 
@@ -44,12 +53,21 @@ public class VideoQueueProcessor {
                     task.getStartTime()
             );
 
-            future.whenComplete((result, throwable) -> updateTaskStatus(task.getId(), throwable));
+            future.whenComplete((result, throwable) -> {
+                MDC.put(TraceIdFilter.TRACE_ID_KEY, traceId);
+                try {
+                    updateTaskStatus(task.getId(), throwable);
+                } finally {
+                    MDC.remove(TraceIdFilter.TRACE_ID_KEY);
+                }
+            });
             log.info("작업 제출 완료: queueId={}", task.getId());
         } catch (Exception e) {
             log.error("작업 제출 실패: queueId={}", task.getId(), e);
             task.markFailed();
             queueRepository.save(task);
+        } finally {
+            MDC.remove(TraceIdFilter.TRACE_ID_KEY);
         }
     }
 
@@ -75,8 +93,13 @@ public class VideoQueueProcessor {
         if (stuckTasks.isEmpty()) return;
 
         for (VideoProcessingQueue task : stuckTasks) {
-            log.warn("[Reaper] 좀비 작업 회수: queueId={}, startedAt={}", task.getId(), task.getStartedAt());
-            task.markFailed();
+            MDC.put(TraceIdFilter.TRACE_ID_KEY, task.getTraceId());
+            try {
+                log.warn("[Reaper] 좀비 작업 회수: queueId={}, startedAt={}", task.getId(), task.getStartedAt());
+                task.markFailed();
+            } finally {
+                MDC.remove(TraceIdFilter.TRACE_ID_KEY);
+            }
         }
         queueRepository.saveAll(stuckTasks);
     }
