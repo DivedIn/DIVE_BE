@@ -5,7 +5,6 @@ import com.site.xidong.domain.queue.repository.VideoProcessingQueueRepository;
 import com.site.xidong.domain.video.service.VideoProcessingService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -27,8 +26,7 @@ public class VideoQueueProcessor {
     // 커밋된 뒤에는 이미 PROCESSING이라 그 트랜잭션의 WHERE status = 'PENDING' 에 더 이상 걸리지 않는다.
     @Transactional
     public List<VideoProcessingQueue> claimPendingTasks(int limit) {
-        List<VideoProcessingQueue> tasks = queueRepository.findPendingTasksForUpdate(
-                LocalDateTime.now(), PageRequest.of(0, limit));
+        List<VideoProcessingQueue> tasks = queueRepository.findPendingTasksForUpdate(LocalDateTime.now(), limit);
         tasks.forEach(VideoProcessingQueue::markProcessing);
         return tasks;
     }

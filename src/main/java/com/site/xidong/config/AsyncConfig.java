@@ -5,6 +5,7 @@ import org.springframework.aop.interceptor.AsyncUncaughtExceptionHandler;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Primary;
 import org.springframework.scheduling.annotation.AsyncConfigurer;
 import org.springframework.scheduling.annotation.EnableAsync;
 import org.springframework.scheduling.annotation.EnableScheduling;
@@ -19,6 +20,14 @@ import java.util.concurrent.ThreadPoolExecutor;
 @EnableScheduling
 public class AsyncConfig implements AsyncConfigurer {
 
+    // [병렬화] videoFanOutExecutor를 추가하면서 ThreadPoolTaskExecutor 타입 빈이 2개가 됐다.
+    // LoadTestController처럼 Lombok @RequiredArgsConstructor + 필드 @Qualifier 조합으로
+    // 주입받는 곳은 (이 프로젝트의 Lombok 설정에서는) 그 @Qualifier가 생성자 파라미터까지
+    // 전파되지 않아 "bean 2개 발견" 에러로 기동이 아예 안 됐다 — @Autowired 필드 주입은
+    // 문제없지만 생성자 주입은 그렇지 않다는 걸 실제로 기동해보고서야 확인했다.
+    // 기존에 여러 클래스가 한정자 없이도 "그" 풀을 기대하고 있었을 가능성을 아예 차단하려고
+    // 이 빈을 @Primary로 지정해, 한정자를 안 붙인 주입점은 전부 안전하게 여기로 떨어지게 한다.
+    @Primary
     @Bean(name = "threadPoolTaskExecutor")
     public ThreadPoolTaskExecutor threadPoolTaskExecutor() {
         ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
