@@ -10,7 +10,19 @@ import lombok.*;
 
 import java.util.List;
 
+// [인덱스 점검] findOpenVideosAfterCursor/findMyVideosAfterCursor는 각각
+// "isOpen으로 거르고 video_id로 정렬", "siteUser FK로 거르고 video_id로 정렬" 패턴이다.
+// SKIP LOCKED 작업에서 실측으로 확인했듯, WHERE 컬럼 하나만 인덱싱하면 정렬용 인덱스가
+// 없어 filesort가 붙고 LIMIT을 걸어도 조건에 맞는 행을 사실상 다 훑는다 — 그래서
+// 단일 컬럼이 아니라 (필터, video_id) 복합 인덱스로 정렬까지 인덱스가 커버하게 했다.
+// site_user FK 컬럼은 실제로는 "site_user_id"가 아니라 "id"다 — @JoinColumn(name="ID")
+// 때문에 컬럼명이 그렇게 굳어져 있다(원래 티켓엔 site_user_id로 적혀 있었는데 실제
+// 스키마와 다르다는 걸 이번에 코드/이전 세션의 DESCRIBE 결과로 확인했다).
 @Entity
+@Table(indexes = {
+        @Index(name = "idx_video_is_open_id", columnList = "is_open, video_id"),
+        @Index(name = "idx_video_site_user_id", columnList = "id, video_id")
+})
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class Video extends BaseTimeEntity {
