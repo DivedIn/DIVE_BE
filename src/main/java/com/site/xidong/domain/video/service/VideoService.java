@@ -18,6 +18,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -40,6 +41,7 @@ public class VideoService {
     private final FeedbackService feedbackService;
     private final VideoProcessingQueueRepository queueRepository;
     private final VideoProcessingService videoProcessingService;
+    private final VideoVisibilityTxService videoVisibilityTxService;
 
     @Autowired
     @Qualifier("threadPoolTaskExecutor")
@@ -77,15 +79,24 @@ public class VideoService {
         return CursorPageResponse.of(overFetched, size, VideoReturnDTO::getVideoId);
     }
 
-    @Transactional
+    // [낙관적 락] 큐 클레임(claimPendingTasks)은 SELECT ... FOR UPDATE로 미리 락을 걸고
+    // 경쟁자를 기다리게 하는 비관적 락이었다 — 큐는 계속 여러 워커가 같은 후보 행을 노리는,
+    // 충돌이 "흔한" 자원이라 그게 맞다. 반대로 영상 공개 여부 토글은 같은 영상을 같은 순간에
+    // 두 곳에서 건드리는 일이 "가끔"만 벌어지는 자원이라, 평소엔 락 비용을 전혀 안 들이고
+    // 버전이 실제로 어긋난 그 순간에만(ObjectOptimisticLockingFailureException) 값을 치르는
+    // 낙관적 락이 더 싸다. 1회 재시도해도 또 부딪히면 409로 클라이언트에게 넘긴다.
     public VideoReturnDTO changeVisibility(Long videoId, String username, Boolean isOpen) {
-        Video video = videoRepository.findById(videoId)
-                .orElseThrow(() -> new CustomException(ErrorCode.VIDEO_NOT_FOUND));
-        if (!video.getSiteUser().getUsername().equals(username)) {
-            throw new CustomException(ErrorCode.FORBIDDEN);
+        try {
+            return videoVisibilityTxService.attempt(videoId, username, isOpen);
+        } catch (ObjectOptimisticLockingFailureException e) {
+            log.warn("낙관적 락 충돌, 1회 재시도: videoId={}", videoId);
+            try {
+                return videoVisibilityTxService.attempt(videoId, username, isOpen);
+            } catch (ObjectOptimisticLockingFailureException e2) {
+                log.error("낙관적 락 재시도도 충돌: videoId={}", videoId);
+                throw new CustomException(ErrorCode.VIDEO_UPDATE_CONFLICT);
+            }
         }
-        video.updateVisibility(isOpen);
-        return VideoReturnDTO.from(videoRepository.save(video));
     }
 
     @Transactional

@@ -31,6 +31,7 @@ public enum ErrorCode {
     // 409
     DUPLICATE_RESOURCE(409, "데이터가 이미 존재합니다"),
     EMAIL_ALREADY_EXISTS(409, "이미 사용 중인 이메일입니다"),
+    VIDEO_UPDATE_CONFLICT(409, "다른 요청과 동시에 처리되어 반영하지 못했습니다. 다시 시도해주세요"),
     // 500
     STT_TIMEOUT(500, "음성 변환 시간이 초과되었습니다"),
     STT_FAILED(500, "음성 변환에 실패했습니다"),

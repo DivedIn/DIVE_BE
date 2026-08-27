@@ -47,6 +47,12 @@ public class Video extends BaseTimeEntity {
     @Column(nullable = false)
     private String processingStatus;
 
+    // [낙관적 락] changeVisibility()처럼 "가끔 부딪히는" 갱신에 붙인다. 평소엔 락을 전혀
+    // 안 걸다가, 저장 시점에 DB의 현재 버전과 내가 읽었던 버전이 다르면(그 사이 다른
+    // 트랜잭션이 먼저 커밋했으면) ObjectOptimisticLockingFailureException으로 알려준다.
+    @Version
+    private Long version;
+
     @Builder
     public Video(String videoPath, String videoName, SiteUser siteUser, Question question,
                  boolean isOpen, String processingStatus) {
