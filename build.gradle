@@ -72,6 +72,9 @@ dependencies {
     // [SSE 멀티서버화] 인스턴스 간 알림 전파를 위한 Redis Pub/Sub
     implementation 'org.springframework.boot:spring-boot-starter-data-redis'
 
+    // [캐시] QuestionSet 목록 읽기 캐싱 — Redis Pub/Sub와 인프라 공유
+    implementation 'org.springframework.boot:spring-boot-starter-cache'
+
 }
 
 tasks.named('test') {
