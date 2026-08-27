@@ -5,16 +5,17 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.site.xidong.global.exception.CustomException;
 import com.site.xidong.global.exception.ErrorCode;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
+import org.springframework.retry.annotation.Backoff;
+import org.springframework.retry.annotation.Retryable;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestTemplate;
 
 @Slf4j
 @Component
-@RequiredArgsConstructor
 public class ClaudeApiClient {
 
     private static final String API_URL = "https://api.anthropic.com/v1/messages";
@@ -22,13 +23,22 @@ public class ClaudeApiClient {
     private static final int MAX_TOKENS = 1024;
 
     private final ObjectMapper objectMapper;
+    private final RestTemplate restTemplate;
 
     @Value("${claude.api.key}")
     private String apiKey;
 
+    public ClaudeApiClient(ObjectMapper objectMapper, @Qualifier("claudeRestTemplate") RestTemplate restTemplate) {
+        this.objectMapper = objectMapper;
+        this.restTemplate = restTemplate;
+    }
+
     /**
      * Claude API를 호출해 피드백 텍스트를 반환한다.
+     * [재시도] 일시적 네트워크 오류/5xx 등으로 callApi()가 CustomException을 던지면
+     * 1초 → 2초 간격으로 최대 3번까지 재시도한다.
      */
+    @Retryable(retryFor = CustomException.class, maxAttempts = 3, backoff = @Backoff(delay = 1000, multiplier = 2))
     public String requestFeedback(String question, String answer) {
         String prompt = answer + "은 CS 면접 질문 [" + question + "]에 대한 답변 영상을 음성으로 변환한 후 " +
                 "STT 변환한거야. 그러니 오타라고 생각하지 말고 융통성 있게 받아들여줘. " +
@@ -60,7 +70,6 @@ public class ClaudeApiClient {
     }
 
     private ResponseEntity<String> callApi(String requestBody) {
-        RestTemplate restTemplate = new RestTemplate();
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
         headers.set("x-api-key", apiKey);

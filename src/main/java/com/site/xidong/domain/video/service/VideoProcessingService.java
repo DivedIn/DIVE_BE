@@ -6,7 +6,10 @@ import com.site.xidong.domain.feedback.entity.Feedback;
 import com.site.xidong.domain.feedback.service.FeedbackService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.scheduling.annotation.Async;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.stereotype.Service;
 
 import java.util.concurrent.CompletableFuture;
@@ -32,6 +35,10 @@ public class VideoProcessingService {
     private final FeedbackService feedbackService;
     private final VideoProcessingTxService txService;
 
+    @Autowired
+    @Qualifier("videoFanOutExecutor")
+    private ThreadPoolTaskExecutor fanOutExecutor;
+
     @Async("videoProcessingExecutor")
     public CompletableFuture<Void> createInitial(
             String username, Long questionId, int requestNo,
@@ -51,13 +58,25 @@ public class VideoProcessingService {
 
     // 트랜잭션 없음. STT/썸네일/Claude 등 외부 I/O를 실행하고,
     // 실제 DB 저장이 필요한 지점만 txService(다른 빈)에 위임해 짧은 트랜잭션으로 처리한다.
+    //
+    // [병렬화] duration 확인(S3 HeadObject)과 썸네일 생성(S3 GetObject + ffmpeg 프레임 추출 + S3 업로드)은
+    // 서로의 결과를 참조하지 않는 독립된 I/O라 동시에 던진다 — 둘 다 끝날 때까지 기다리는 시간은
+    // 직렬 합산이 아니라 더 오래 걸리는 쪽(보통 썸네일)만큼이 된다. 이미 videoProcessingExecutor의
+    // 워커 스레드 안에서 실행 중인 메서드라, 여기에 새로 @Async를 붙여 self-invocation 함정에
+    // 다시 빠지는 대신 CompletableFuture.supplyAsync에 전용 풀(videoFanOutExecutor)을 직접 주입한다.
     public void processVideo(Long videoId, int requestNo, String videoKey, String username, long startTime) {
         long procStart = System.currentTimeMillis();
         try {
-            double durationSeconds = sttService.getVideoDuration(videoKey);
+            CompletableFuture<Double> durationFuture =
+                    CompletableFuture.supplyAsync(() -> sttService.getVideoDuration(videoKey), fanOutExecutor);
+            CompletableFuture<String> thumbnailFuture =
+                    CompletableFuture.supplyAsync(() -> thumbnailService.generate(videoKey), fanOutExecutor);
+            CompletableFuture.allOf(durationFuture, thumbnailFuture).join();
+
+            double durationSeconds = durationFuture.join();
             boolean isLongVideo = durationSeconds > 300;
 
-            String thumbnailUrl = thumbnailService.generate(videoKey);
+            String thumbnailUrl = thumbnailFuture.join();
             txService.updateVideoThumbnailAndStatus(videoId, thumbnailUrl);
 
             String answer = isLongVideo
