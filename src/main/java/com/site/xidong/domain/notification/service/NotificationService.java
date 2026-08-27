@@ -5,6 +5,7 @@ import com.site.xidong.global.exception.CustomException;
 import com.site.xidong.global.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
@@ -20,6 +21,7 @@ public class NotificationService {
     private static final String CONNECTION = "connection";
 
     private final EmitterRepository emitterRepository;
+    private final NotificationPublisher notificationPublisher;
 
     public SseEmitter connectNotification(String username) {
         log.info("SSE 연결 프로세스 시작: {}", username);
@@ -56,16 +58,26 @@ public class NotificationService {
         return sseEmitter;
     }
 
+    // [SSE 멀티서버화] 이 인스턴스의 로컬 emitterMap을 더 이상 직접 뒤지지 않는다.
+    // 호출부(VideoProcessingTxService 등)는 그대로 두고, Redis 채널에 publish만 해서
+    // 실제로 emitter를 들고 있는 인스턴스(자기 자신일 수도 있다)가 받아가게 한다.
     public void send(String username, String eventName, Object data) {
-        log.info("Emitter 조회 시도 - key: {}", username);
+        notificationPublisher.publish(username, eventName, data);
+    }
+
+    // [SSE 멀티서버화] NotificationSubscriber가 Redis에서 메시지를 받았을 때 호출한다.
+    // 예전 send()가 하던 "로컬 emitterMap 조회 + 실제 전송" 로직이 그대로 여기로 옮겨왔다.
+    // dataJson은 publish 시점에 이미 직렬화된 문자열이라 재역직렬화 없이 그대로 흘려보낸다.
+    public void deliverLocally(String username, String eventName, String dataJson) {
+        log.info("로컬 emitter 조회 시도 - key: {}", username);
         emitterRepository.get(username).ifPresentOrElse(sseEmitter -> {
             try {
-                sseEmitter.send(SseEmitter.event().name(eventName).data(data));
-                log.info("Emitter 찾음 - hash: {}", System.identityHashCode(sseEmitter));
+                sseEmitter.send(SseEmitter.event().name(eventName).data(dataJson, MediaType.APPLICATION_JSON));
+                log.info("로컬 emitter로 전송 완료 - hash: {}", System.identityHashCode(sseEmitter));
             } catch (IOException e) {
                 emitterRepository.delete(username);
-                throw new CustomException(ErrorCode.INTERNAL_SERVER_ERROR);
+                log.error("로컬 emitter 전송 실패 - {}: {}", username, e.getMessage());
             }
-        }, () -> log.info("Emitter 없음 - {}", username));
+        }, () -> log.info("이 인스턴스엔 emitter 없음(다른 인스턴스가 처리했거나 연결 없음) - {}", username));
     }
 }
