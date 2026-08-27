@@ -6,6 +6,7 @@ import com.site.xidong.domain.video.dto.VideoWithFeedbackDTO;
 import com.site.xidong.domain.video.service.VideoService;
 import com.site.xidong.global.infra.S3Uploader;
 import com.site.xidong.global.response.ApiResponse;
+import com.site.xidong.global.response.CursorPageResponse;
 import io.micrometer.core.annotation.Timed;
 import lombok.extern.log4j.Log4j2;
 import org.joda.time.DateTime;
@@ -18,7 +19,6 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
@@ -81,13 +81,18 @@ public class VideoController {
     }
 
     @GetMapping("/all")
-    public ResponseEntity<ApiResponse<List<VideoReturnDTO>>> getOpenVideos() {
-        return ResponseEntity.ok(ApiResponse.success(videoService.getOpenVideos()));
+    public ResponseEntity<ApiResponse<CursorPageResponse<VideoReturnDTO>>> getOpenVideos(
+            @RequestParam(required = false) Long cursor,
+            @RequestParam(defaultValue = "20") int size) {
+        return ResponseEntity.ok(ApiResponse.success(videoService.getOpenVideos(cursor, size)));
     }
 
     @GetMapping("/myVideos")
-    public ResponseEntity<ApiResponse<List<VideoReturnDTO>>> getMyVideos(@AuthenticationPrincipal UserDetails ud) {
-        return ResponseEntity.ok(ApiResponse.success(videoService.getMyVideos(ud.getUsername())));
+    public ResponseEntity<ApiResponse<CursorPageResponse<VideoReturnDTO>>> getMyVideos(
+            @AuthenticationPrincipal UserDetails ud,
+            @RequestParam(required = false) Long cursor,
+            @RequestParam(defaultValue = "20") int size) {
+        return ResponseEntity.ok(ApiResponse.success(videoService.getMyVideos(ud.getUsername(), cursor, size)));
     }
 
     @PutMapping("/{videoId}/change/visibility")

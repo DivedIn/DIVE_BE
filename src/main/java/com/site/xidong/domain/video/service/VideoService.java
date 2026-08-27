@@ -12,10 +12,12 @@ import com.site.xidong.domain.video.entity.Video;
 import com.site.xidong.domain.video.repository.VideoRepository;
 import com.site.xidong.global.exception.CustomException;
 import com.site.xidong.global.exception.ErrorCode;
+import com.site.xidong.global.response.CursorPageResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -55,16 +57,24 @@ public class VideoService {
         return toVideoWithFeedback(video);
     }
 
-    public List<VideoReturnDTO> getOpenVideos() {
-        return videoRepository.findAllOpenVideos().stream()
+    // [N+1] fetch join으로 siteUser/question/question.questionSet을 한 쿼리에 실어 오므로
+    // size건을 반환하는 데 드는 쿼리는 요청당 1개로 고정된다.
+    // [페이지네이션] size+1건을 가져와 CursorPageResponse.of()에 그대로 넘기면
+    // count 쿼리 없이 hasNext/nextCursor가 계산된다.
+    public CursorPageResponse<VideoReturnDTO> getOpenVideos(Long cursor, int size) {
+        List<VideoReturnDTO> overFetched = videoRepository
+                .findOpenVideosAfterCursor(cursor, PageRequest.of(0, size + 1)).stream()
                 .map(VideoReturnDTO::from)
                 .toList();
+        return CursorPageResponse.of(overFetched, size, VideoReturnDTO::getVideoId);
     }
 
-    public List<VideoReturnDTO> getMyVideos(String username) {
-        return videoRepository.findMyVideos(username).stream()
+    public CursorPageResponse<VideoReturnDTO> getMyVideos(String username, Long cursor, int size) {
+        List<VideoReturnDTO> overFetched = videoRepository
+                .findMyVideosAfterCursor(username, cursor, PageRequest.of(0, size + 1)).stream()
                 .map(VideoReturnDTO::from)
                 .toList();
+        return CursorPageResponse.of(overFetched, size, VideoReturnDTO::getVideoId);
     }
 
     @Transactional
