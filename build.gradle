@@ -65,6 +65,10 @@ dependencies {
     implementation 'io.micrometer:micrometer-registry-prometheus'
     implementation 'io.prometheus:prometheus-metrics-exposition-formats'
 
+    // [재시도] @Retryable — 외부 API(Claude 등) 일시적 실패를 흡수
+    implementation 'org.springframework.retry:spring-retry'
+    implementation 'org.springframework.boot:spring-boot-starter-aop'
+
 }
 
 tasks.named('test') {
